@@ -11,7 +11,6 @@ dist/VCRUNTIME140_1.dll      编译好的代理（5 KB）
 src/proxy.c                  源码
 install-proxy.ps1            安装/卸载（备份/恢复/管理员检测）
 install-proxy.cmd            双击包装
-research/                    早期 launcher / IAT hook 研究代码（未用于产品）
 ```
 
 ## 工作原理
