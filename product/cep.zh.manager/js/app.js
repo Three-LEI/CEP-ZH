@@ -239,7 +239,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-set-theme]'), function (b) {
       b.classList.toggle('active', b.getAttribute('data-set-theme') === S.theme);
     });
-    try { localStorage.setItem('cepzh.theme.v2', S.theme); } catch (e) {}
+    try { localStorage.setItem('cepzh.theme.v3', S.theme); } catch (e) {}
   }
 
   function renderAbout() {
@@ -1074,7 +1074,7 @@
     S.lastTranslationSeen = (S.agent && S.agent.translation && S.agent.translation.token) || '';
     var theme = 'dark';
     try {
-      var saved = localStorage.getItem('cepzh.theme.v2');
+      var saved = localStorage.getItem('cepzh.theme.v3');
       if (saved === 'light' || saved === 'dark') theme = saved;
     } catch (e) {}
     applyTheme(theme);
