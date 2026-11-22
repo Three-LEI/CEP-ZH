@@ -1,5 +1,7 @@
 # Adobe CEP 通用注入汉化（cep-zh）
 
+[GitHub 仓库](https://github.com/Three-LEI/CEP-ZH) · [哔哩哔哩主页](https://space.bilibili.com/353544977)
+
 一套**不改扩展源码**的 CEP 面板汉化方案：给每个 CEP 扩展写入官方支持的 `.debug` 远程调试配置，
 由常驻 Agent 通过 Chrome DevTools Protocol（CDP）向 `CEPHtmlEngine.exe` 里的面板注入翻译运行时，
 在 DOM 层实时替换文本与属性。
