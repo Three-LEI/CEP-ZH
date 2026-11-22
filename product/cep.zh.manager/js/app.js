@@ -760,7 +760,7 @@
     S.repairToastToken = '';
     saveControl({ repairDebugToken: token });
     renderDebugNotice();
-    toast('已请求修复全部缺失 .debug，正在写入…', 3000);
+    toast('已请求修复全部缺失 .debug；如弹出 UAC 请选择“是”…', 4000);
     setTimeout(refreshAgent, 500);
   }
 
@@ -799,7 +799,7 @@
     var title = '发现 ' + n + ' 个插件缺少 .debug';
     var sub = names + (n > 2 ? ' 等' : '') + ' · CEP9–11 需要补写；CEP12 代理已覆盖的插件可忽略。';
     if (unwritable) sub += ' 系统目录将请求管理员权限。';
-    if (S.repairToken) sub = '已请求修复，正在等待 Agent / 管理员写入…';
+    if (S.repairToken) sub = '已请求修复，正在等待管理员写入；如出现 UAC 请选择“是”。';
 
     $('debugTitle').textContent = title;
     $('debugSub').textContent = sub;
@@ -857,7 +857,7 @@
       var remaining = pendingDebug().length;
       var failed = rep.status === 'error';
       var finished = rep.status === 'done' || (rep.status === 'elevated' && remaining === 0);
-      var stale = rep.status === 'elevated' && rep.at && (Date.now() - Date.parse(rep.at) > 20000);
+      var stale = rep.status === 'elevated' && rep.at && (Date.now() - Date.parse(rep.at) > 120000);
       if (finished || failed || stale) {
         if (S.repairToastToken !== rep.token) {
           S.repairToastToken = rep.token;

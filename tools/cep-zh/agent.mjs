@@ -385,7 +385,7 @@ function repairPendingDebug(token) {  const pending = pendingDebug();
     }
     refreshDebugBaseline();
     const remaining = pendingDebug().length;
-    const status = remaining === 0 ? 'done' : (needElevate ? 'elevated' : 'error');
+    const status = remaining === 0 ? 'done' : (code !== 0 ? 'error' : (needElevate ? 'elevated' : 'error'));
     lastRepair = {
       token, at: new Date().toISOString(), status, total, remaining,
       elevated: needElevate,
@@ -393,7 +393,9 @@ function repairPendingDebug(token) {  const pending = pendingDebug();
         ? '已写入 .debug，请重启 Adobe 应用'
         : (status === 'elevated'
           ? '已请求管理员写入系统目录；完成后请重启 Adobe 应用'
-          : `仍有 ${remaining} 个插件未写入，请查看日志`),
+          : (code !== 0
+            ? '管理员写入未完成或已取消，请重试'
+            : `仍有 ${remaining} 个插件未写入，请查看日志`)),
     };
     writeState(panelState(lastLive));
     log(`[debug] repair exit=${code} remaining=${remaining} status=${status}`);

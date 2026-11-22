@@ -218,9 +218,10 @@ async function cmdEnable(argv) {
       console.log('\nrequesting elevation...');
       const args = process.argv.slice(2).filter((a) => a !== '--elevate');
       const quoted = args.map((a) => "'" + String(a).replace(/'/g, "''") + "'").join(',');
-      const cmd = `Start-Process -FilePath '${process.execPath.replace(/'/g, "''")}' -ArgumentList @(${quoted}) -Verb RunAs`;
-      spawnSync('powershell.exe', ['-NoProfile', '-Command', cmd], { stdio: 'inherit' });
-      return 0;
+      const node = process.execPath.replace(/'/g, "''");
+      const cmd = `$p = Start-Process -FilePath '${node}' -ArgumentList @(${quoted}) -Verb RunAs -Wait -PassThru; exit $p.ExitCode`;
+      const elevated = spawnSync('powershell.exe', ['-NoProfile', '-Command', cmd], { stdio: 'inherit' });
+      return elevated.status == null ? 1 : elevated.status;
     }
     console.log('\nRun the same command from an elevated prompt (or add --elevate) to cover system-wide extensions.');
     console.log('User-level extensions in %APPDATA%\\Adobe\\CEP\\extensions were enabled without admin.');
