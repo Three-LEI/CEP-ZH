@@ -737,10 +737,31 @@
       lines.push('请确认隐藏扩展 cep.zh.agent 已启动。');
     }
     $('agentDetail').textContent = lines.join('\n');
+    var all = $('btnRepairAllDebug');
+    if (all) {
+      var count = pendingDebug().length;
+      all.disabled = !!S.repairToken || count === 0;
+      all.textContent = count ? ('修复全部 .debug · ' + count) : '修复全部 .debug';
+    }
   }
 
   function pendingDebug() {
     return S.agent && Array.isArray(S.agent.pendingDebug) ? S.agent.pendingDebug : [];
+  }
+
+  function requestDebugRepair() {
+    if (S.repairToken) return;
+    if (!pendingDebug().length) {
+      toast('没有缺失 .debug 的插件');
+      return;
+    }
+    var token = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+    S.repairToken = token;
+    S.repairToastToken = '';
+    saveControl({ repairDebugToken: token });
+    renderDebugNotice();
+    toast('已请求修复全部缺失 .debug，正在写入…', 3000);
+    setTimeout(refreshAgent, 500);
   }
 
   function renderDebugNotice() {
@@ -775,7 +796,7 @@
       return p.bundleId || p.path || '未命名插件';
     }).join('、');
     var unwritable = pending.filter(function (p) { return !p.writable; }).length;
-    var title = '发现 ' + n + ' 个新插件缺少 .debug';
+    var title = '发现 ' + n + ' 个插件缺少 .debug';
     var sub = names + (n > 2 ? ' 等' : '') + ' · CEP9–11 需要补写；CEP12 代理已覆盖的插件可忽略。';
     if (unwritable) sub += ' 系统目录将请求管理员权限。';
     if (S.repairToken) sub = '已请求修复，正在等待 Agent / 管理员写入…';
@@ -783,6 +804,11 @@
     $('debugTitle').textContent = title;
     $('debugSub').textContent = sub;
     $('btnRepairDebug').disabled = !!S.repairToken;
+    var all = $('btnRepairAllDebug');
+    if (all) {
+      all.disabled = !!S.repairToken || n === 0;
+      all.textContent = n ? ('修复全部 .debug · ' + n) : '修复全部 .debug';
+    }
     notice.classList.remove('hidden');
     if (overlay) overlay.classList.remove('hidden');
     document.body.classList.add('has-debug');
@@ -951,20 +977,12 @@
     $('btnRestore').onclick = function () {
       setGlobalEnabled(false);
     };
-    $('btnRepairDebug').onclick = function () {
-      if (S.repairToken || !pendingDebug().length) return;
-      var token = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
-      S.repairToken = token;
-      S.repairToastToken = '';
-      saveControl({ repairDebugToken: token });
-      renderDebugNotice();
-      toast('已请求修复，正在写入 .debug…', 3000);
-      setTimeout(refreshAgent, 500);
-    };
+    $('btnRepairDebug').onclick = requestDebugRepair;
     $('btnDismissDebug').onclick = function () {
       S.debugDismissed = S.debugSig;
       renderDebugNotice();
     };
+    if ($('btnRepairAllDebug')) $('btnRepairAllDebug').onclick = requestDebugRepair;
     $('pluginToggle').onchange = function () {
       if (!S.key) return;
       var disabled = S.control.disabledPlugins.slice();
