@@ -1,0 +1,14 @@
+{
+  "name": "Flow (com.rendertom.flow)",
+  "strings": {
+    "Update Available": "有可用更新",
+    "Details…": "详情…",
+    "Remind Me": "稍后提醒",
+    "Tomorrow": "明天",
+    "Next Week": "下周",
+    "Next Month": "下个月",
+    "Skip Version": "跳过此版本",
+    "APPLY": "应用",
+    "default": "默认"
+  }
+}

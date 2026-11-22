@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <title>CEP 汉化管理器</title>
+  <link rel="stylesheet" href="./css/app.css" />
+</head>
+<body>
+  <div class="canvas" aria-hidden="true">
+    <div class="grid"></div>
+    <div class="shape ring r1"></div>
+    <div class="shape ring r2"></div>
+    <div class="shape line h1"></div>
+    <div class="shape line v1"></div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-row">
+        <h1>CEP 汉化管理器</h1>
+        <span class="brand-code">/ CEP-ZH EDITOR</span>
+      </div>
+      <div class="byline">
+        <span class="byline-name">three-lei × deepseek</span>
+        <span class="byline-sep"></span>
+        <span class="version">v0.2.0</span>
+      </div>
+    </div>
+    <div class="top-actions">
+      <div class="theme-switch" role="group" aria-label="主题">
+        <button type="button" data-set-theme="light">LIGHT</button>
+        <button type="button" data-set-theme="dark">DARK</button>
+      </div>
+      <label class="switch" title="全局启用/停用汉化">
+        <input type="checkbox" id="globalToggle" />
+        <span class="track"><span class="thumb"></span></span>
+        <span class="switch-text">全局汉化</span>
+      </label>
+      <button id="btnRestore" class="btn outline" title="立即恢复所有面板原文">恢复原文</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <nav class="side-nav" aria-label="主导航">
+        <button class="nav-item active" data-view="plugin"><span class="nav-idx">01</span><span>插件字典</span></button>
+        <button class="nav-item" data-view="global"><span class="nav-idx">02</span><span>公共字典</span></button>
+        <button class="nav-item" data-view="settings"><span class="nav-idx">03</span><span>设置</span></button>
+        <button class="nav-item" data-view="export"><span class="nav-idx">04</span><span>导出 / 导入</span></button>
+        <button class="nav-item" data-view="about"><span class="nav-idx">05</span><span>关于</span></button>
+      </nav>
+
+      <div class="side-section" id="sidePlugins">
+        <div class="search">
+          <span class="search-icon">⌕</span>
+          <input id="pluginSearch" type="search" placeholder="搜索插件" autocomplete="off" />
+        </div>
+        <div class="side-head">
+          <span>INSTALLED / 已安装</span>
+          <b id="pluginCount">0</b>
+        </div>
+        <div id="pluginList" class="plugin-list"></div>
+      </div>
+
+      <div class="side-footer">
+        <button id="btnCollect" class="btn primary wide">捕获已打开插件</button>
+        <button id="btnRefresh" class="btn icon" title="刷新">↻</button>
+      </div>
+      <button id="btnTranslateAll" class="btn ai-all" title="翻译所有插件字典中尚未翻译的词条">AI 翻译全部字典</button>
+    </aside>
+
+    <main class="main">
+      <section id="viewPlugin" class="view">
+        <div class="view-head">
+          <div class="view-title">
+            <div class="eyebrow">PLUGIN DICTIONARY</div>
+            <h2 id="pluginTitle">选择一个插件</h2>
+            <p id="pluginMeta">左侧选择插件，或打开 CEP 面板后点击“捕获已打开插件”。</p>
+          </div>
+          <div class="view-actions">
+            <label class="switch small" title="只停用/启用当前插件">
+              <input type="checkbox" id="pluginToggle" />
+              <span class="track"><span class="thumb"></span></span>
+              <span class="switch-text">该插件汉化</span>
+            </label>
+            <button id="btnAdd" class="btn">＋ 添加词条</button>
+            <button id="btnAi" class="btn" title="翻译当前插件中尚未翻译的词条">AI 翻译</button>
+          </div>
+        </div>
+
+        <div class="stats" id="pluginStats"></div>
+
+        <div class="panel table-card">
+          <div class="table-toolbar">
+            <div class="segmented" id="filterSeg">
+              <button data-filter="all" class="active">全部</button>
+              <button data-filter="untranslated">未翻译</button>
+              <button data-filter="translated">已翻译</button>
+              <button data-filter="common">公共回退</button>
+            </div>
+            <div class="table-search">
+              <span class="slash">/</span>
+              <input id="dictSearch" type="search" placeholder="搜索原文或译文" autocomplete="off" />
+            </div>
+            <div class="table-info" id="tableInfo"></div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th class="col-orig">原文 / SOURCE</th>
+                  <th class="col-tr">译文 / TARGET</th>
+                  <th class="col-status">状态</th>
+                  <th class="col-act"></th>
+                </tr>
+              </thead>
+              <tbody id="pluginRows"></tbody>
+            </table>
+          </div>
+          <div id="pluginEmpty" class="empty hidden">没有匹配的词条</div>
+          <div class="pager" id="pluginPager"></div>
+        </div>
+      </section>
+
+      <section id="viewGlobal" class="view hidden">
+        <div class="view-head">
+          <div class="view-title">
+            <div class="eyebrow">COMMON DICTIONARY</div>
+            <h2>公共字典</h2>
+            <p>插件字典优先；插件译文为空时回退到这里。</p>
+          </div>
+          <div class="view-actions">
+            <button id="btnAddCommon" class="btn">＋ 添加公共词条</button>
+          </div>
+        </div>
+        <div class="stats" id="globalStats"></div>
+        <div class="panel table-card">
+          <div class="table-toolbar">
+            <div class="segmented" id="globalFilterSeg">
+              <button data-filter="all" class="active">全部</button>
+              <button data-filter="untranslated">未翻译</button>
+              <button data-filter="translated">已翻译</button>
+            </div>
+            <div class="table-search">
+              <span class="slash">/</span>
+              <input id="globalDictSearch" type="search" placeholder="搜索原文或译文" autocomplete="off" />
+            </div>
+            <div class="table-info" id="globalTableInfo"></div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th class="col-orig">原文 / SOURCE</th>
+                  <th class="col-tr">译文 / TARGET</th>
+                  <th class="col-status">状态</th>
+                  <th class="col-act"></th>
+                </tr>
+              </thead>
+              <tbody id="globalRows"></tbody>
+            </table>
+          </div>
+          <div id="globalEmpty" class="empty hidden">没有匹配的词条</div>
+          <div class="pager" id="globalPager"></div>
+        </div>
+      </section>
+
+      <section id="viewSettings" class="view hidden">
+        <div class="settings-head">
+          <div class="eyebrow">SYSTEM / CONFIG</div>
+          <h2>设置</h2>
+          <p>配置翻译 API、查看 Agent 与字典路径。主题在右上角切换。</p>
+        </div>
+        <div class="settings-grid">
+          <div class="panel settings-card">
+            <div class="panel-label">01 / TRANSLATION API</div>
+            <h3>翻译 API</h3>
+            <p class="hint">Key 只保存在本机 <code>%APPDATA%\CEP-ZH\config.json</code>。</p>
+            <label>PROVIDER</label>
+            <select id="apiProvider">
+              <option value="none">不启用</option>
+              <option value="openai">OpenAI 兼容 /chat/completions</option>
+              <option value="deepl">DeepL /v2/translate</option>
+              <option value="mock">Mock（本地测试，不联网）</option>
+            </select>
+            <label>BASE URL</label>
+            <input id="apiBase" placeholder="https://api.deepseek.com" />
+            <label>MODEL</label>
+            <input id="apiModel" placeholder="deepseek-flash" />
+            <label>API KEY</label>
+            <input id="apiKey" type="password" placeholder="sk-..." />
+            <label>TARGET LANGUAGE</label>
+            <input id="apiLang" value="zh-CN" />
+            <div class="card-actions">
+              <button id="btnSaveApi" class="btn primary">保存配置</button>
+              <button id="btnTestApi" class="btn" disabled title="下一版接入">测试连接</button>
+            </div>
+          </div>
+
+          <div class="panel settings-card">
+            <div class="panel-label">02 / AGENT</div>
+            <h3>运行状态</h3>
+            <div id="agentDetail" class="agent-detail">未连接</div>
+            <div class="card-actions">
+              <button id="btnRefreshAgent" class="btn">刷新状态</button>
+            </div>
+            <div class="panel-label section-gap">03 / PATHS</div>
+            <div id="settingsPaths" class="paths"></div>
+            <div class="font-credit">字体：<a href="https://hyperos.mi.com/font/" target="_blank" rel="noreferrer">MiSans</a> © Xiaomi · 依据 MiSans 字体许可嵌入</div>
+            <div class="panel-label section-gap">04 / VIEW</div>
+            <p class="hint">界面会根据面板尺寸和系统缩放自动调整字号与密度，无需手动设置。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="viewExport" class="view hidden">
+        <div class="view-head">
+          <div class="view-title">
+            <div class="eyebrow">TRANSFER / DICTIONARY</div>
+            <h2>导出 / 导入</h2>
+            <p>导出选中插件字典到新文件夹，或从文件夹批量读回。</p>
+          </div>
+        </div>
+        <div class="settings-grid">
+          <div class="panel settings-card">
+            <div class="panel-label">04 / EXPORT</div>
+            <h3>导出插件字典</h3>
+            <p class="hint">默认全选。导出时新建 <code>CEP-ZH-dict-日期-时间</code> 文件夹，将 JSON 放入其中。</p>
+            <div class="export-toolbar">
+              <button id="btnExportAll" class="btn">全选</button>
+              <button id="btnExportNone" class="btn">清空</button>
+              <span id="exportCount" class="table-info"></span>
+            </div>
+            <div id="exportList" class="export-list"></div>
+            <div class="card-actions">
+              <button id="btnExport" class="btn primary">导出选中</button>
+            </div>
+          </div>
+
+          <div class="panel settings-card">
+            <div class="panel-label">04 / IMPORT</div>
+            <h3>导入字典</h3>
+            <p class="hint">选择字典文件夹。程序会读取其中的插件 JSON 和 <code>global.json</code>，合并到用户字典。</p>
+            <label class="check-line"><input id="importOverwrite" type="checkbox" /> 导入译文覆盖已有译文</label>
+            <div class="card-actions">
+              <button id="btnImport" class="btn primary">选择文件夹并导入</button>
+            </div>
+            <div id="exportLog" class="agent-detail export-log">尚未操作</div>
+          </div>
+        </div>
+      </section>
+      <section id="viewAbout" class="view hidden">
+        <div class="view-head">
+          <div class="view-title">
+            <div class="eyebrow">ABOUT / PROJECT</div>
+            <h2>关于</h2>
+            <p>CEP 通用汉化框架与管理器 · three-lei × deepseek</p>
+          </div>
+        </div>
+        <div class="settings-grid">
+          <div class="panel settings-card">
+            <div class="panel-label">05 / PROJECT</div>
+            <h3>CEP-ZH</h3>
+            <p class="hint">通用 CEP 面板汉化框架与管理器，运行在 Adobe CEP 面板内。</p>
+            <div class="about-meta">
+              CEP 汉化管理器 v0.2.0<br />
+              three-lei × deepseek<br />
+              代码：MIT · 字体：MiSans
+            </div>
+          </div>
+
+          <div class="panel settings-card">
+            <div class="panel-label">05 / LINKS</div>
+            <h3>项目与作者</h3>
+            <p class="hint">GitHub 开源地址：</p>
+            <div class="link-line">
+              <code id="githubUrl">https://github.com/Three-LEI/CEP-ZH</code>
+              <a id="githubLink" class="btn" target="_blank" rel="noreferrer">打开 GitHub</a>
+            </div>
+            <p class="hint">哔哩哔哩：</p>
+            <a id="biliLink" class="btn" target="_blank" rel="noreferrer">哔哩哔哩主页</a>
+            <div class="about-meta">three-lei × deepseek<br />CEP 汉化管理器 v0.2.0</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="statusbar">
+    <span id="agentStatus">AGENT / 等待中</span>
+    <span id="dictPath"></span>
+    <span id="lastCollect"></span>
+  </footer>
+
+  <div id="toast" class="toast"></div>
+
+  <dialog id="addDialog" class="dialog">
+    <form method="dialog" id="addForm">
+      <div class="eyebrow">NEW ENTRY</div>
+      <h3 id="addTitle">添加词条</h3>
+      <label>SOURCE / 原文</label>
+      <input id="addOriginal" required autocomplete="off" />
+      <label>TARGET / 译文</label>
+      <input id="addTranslation" autocomplete="off" placeholder="可留空，稍后填写" />
+      <div class="dialog-actions">
+        <button type="button" id="addCancel" class="btn">取消</button>
+        <button type="submit" class="btn primary">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="./js/app.js"></script>
+</body>
+</html>

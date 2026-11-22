@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ExtensionManifest Version="7.0" ExtensionBundleId="cep.zh.manager" ExtensionBundleVersion="0.2.0"
+    ExtensionBundleName="CEP 汉化管理器" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <ExtensionList>
+    <Extension Id="cep.zh.manager.panel" Version="0.2.0" />
+    <Extension Id="cep.zh.agent" Version="0.2.0" />
+  </ExtensionList>
+  <ExecutionEnvironment>
+    <HostList>
+      <Host Name="AEFT" Version="[0.0,99.9]" />
+      <Host Name="PPRO" Version="[0.0,99.9]" />
+      <Host Name="PHXS" Version="[0.0,99.9]" />
+      <Host Name="PHSP" Version="[0.0,99.9]" />
+      <Host Name="ILST" Version="[0.0,99.9]" />
+      <Host Name="IDSN" Version="[0.0,99.9]" />
+      <Host Name="FLPR" Version="[0.0,99.9]" />
+      <Host Name="AUDT" Version="[0.0,99.9]" />
+      <Host Name="DRWV" Version="[0.0,99.9]" />
+    </HostList>
+    <LocaleList>
+      <Locale Code="All" />
+    </LocaleList>
+    <RequiredRuntimeList>
+      <RequiredRuntime Name="CSXS" Version="9.0" />
+    </RequiredRuntimeList>
+  </ExecutionEnvironment>
+  <DispatchInfoList>
+    <Extension Id="cep.zh.manager.panel">
+      <DispatchInfo>
+        <Resources>
+          <MainPath>./index.html</MainPath>
+        </Resources>
+        <Lifecycle>
+          <AutoVisible>true</AutoVisible>
+        </Lifecycle>
+        <UI>
+          <Type>Panel</Type>
+          <Menu>CEP 汉化管理</Menu>
+          <Geometry>
+            <Size>
+              <Height>620</Height>
+              <Width>560</Width>
+            </Size>
+            <MinSize>
+              <Height>420</Height>
+              <Width>420</Width>
+            </MinSize>
+          </Geometry>
+        </UI>
+      </DispatchInfo>
+    </Extension>
+    <Extension Id="cep.zh.agent">
+      <DispatchInfo>
+        <Resources>
+          <MainPath>./agent.html</MainPath>
+          <CEFCommandLine>
+            <Parameter>--enable-nodejs</Parameter>
+            <Parameter>--mixed-context</Parameter>
+          </CEFCommandLine>
+        </Resources>
+        <Lifecycle>
+          <AutoVisible>false</AutoVisible>
+          <StartOn>
+            <Event>ApplicationInitialized</Event>
+            <Event>com.adobe.csxs.events.ApplicationInitialized</Event>
+            <Event>applicationActivate</Event>
+          </StartOn>
+        </Lifecycle>
+        <UI>
+          <Type>Custom</Type>
+          <Geometry>
+            <Size>
+              <Height>1</Height>
+              <Width>1</Width>
+            </Size>
+          </Geometry>
+        </UI>
+      </DispatchInfo>
+    </Extension>
+  </DispatchInfoList>
+  <Permissions>
+    <Access>All</Access>
+    <SocketPolicy>All</SocketPolicy>
+    <Filesystem>
+      <Read>All</Read>
+      <Write>All</Write>
+      <Create>All</Create>
+    </Filesystem>
+  </Permissions>
+</ExtensionManifest>

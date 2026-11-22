@@ -1,0 +1,19 @@
+{
+  "name": "Overlord (Overlord)",
+  "strings": {
+    "Push selection to Ai": "将选区推送到 Ai",
+    "Pull selection from Ai": "从 Ai 拉取选区",
+    "Split shapes to layers": "将形状拆分为图层",
+    "Detect parametric Rectangle/Ellipse": "检测参数化矩形/椭圆",
+    "Center anchor points": "居中锚点",
+    "Layers at comp center": "图层置于合成中心",
+    "Switch to Ai": "切换到 Ai",
+    "Matching comp from artboard": "从画板匹配合成",
+    "Matching artboard from comp": "从合成匹配画板",
+    "Push selection to AI": "将选区推送到 AI",
+    "Pull selection from AI": "从 AI 拉取选区",
+    "Switch to AI": "切换到 AI",
+    "Matching comp from Artboard": "从画板匹配合成",
+    "Matching Artboard from comp": "从合成匹配画板"
+  }
+}

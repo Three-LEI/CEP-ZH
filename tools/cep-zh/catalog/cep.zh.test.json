@@ -1,0 +1,33 @@
+{
+  "bundleId": "cep.zh.test",
+  "extIds": [
+    "cep.zh.test.panel"
+  ],
+  "title": "CEP ZH Test",
+  "url": "file:///C:/Users/LEI/AppData/Roaming/Adobe/CEP/extensions/cep.zh.test/index.html",
+  "updatedAt": "2026-11-22T05:04:28.521Z",
+  "strings": {
+    "Localization Test Panel": 1,
+    "Rendered by CEPHtmlEngine (Chromium 99), not by After Effects.": 1,
+    "Apply": 1,
+    "Cancel": 1,
+    "Reset": 1,
+    "Status:": 1,
+    "Done": 1,
+    "Frames rendered: 436": 1,
+    "Light DOM content": 1,
+    "Shadow DOM content": 1,
+    "Shadow Apply": 1,
+    "Inside iframe: Preview": 1,
+    "Refresh": 1
+  },
+  "attrs": {
+    "Apply the current settings": 1,
+    "Restore default values": 1,
+    "Search presets...": 1,
+    "Search presets": 1,
+    "Shadow action": 1,
+    "Preview frame": 1,
+    "Refresh preview": 1
+  }
+}

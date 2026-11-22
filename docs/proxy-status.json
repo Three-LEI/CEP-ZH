@@ -1,0 +1,80 @@
+﻿{
+  "enabledFiles": 0,
+  "ports": 0,
+  "bundles": 109,
+  "extensionIds": 87,
+  "live": [
+    {
+      "port": 39612,
+      "pid": 3512,
+      "extId": "com.adobe.illustrator.OnBoarding",
+      "bundleId": "com.adobe.illustrator.OnBoarding",
+      "title": "index.html",
+      "url": "file:///D:/Adobe/Adobe%20Illustrator%202026/Support%20Files/Required/CEP/extensions/com.adobe.illustrator.OnBoarding/index.html"
+    },
+    {
+      "port": 39724,
+      "pid": 21624,
+      "extId": "org.royalpixels.localserver",
+      "bundleId": "MYFX",
+      "title": "localServer.html",
+      "url": "file:///C:/Program%20Files/Common%20Files/Adobe/CEP/extensions/MYFX%203.0.2/localServer.html"
+    },
+    {
+      "port": 39808,
+      "pid": 15708,
+      "extId": "com.verse.aelocalizer.bridge",
+      "bundleId": "com.verse.aelocalizer",
+      "title": "AE Localizer Bridge",
+      "url": "file:///C:/Users/LEI/AppData/Roaming/Adobe/CEP/extensions/com.verse.aelocalizer.bridge/index.html"
+    },
+    {
+      "port": 39816,
+      "pid": 12716,
+      "extId": "com.rendertom.flow",
+      "bundleId": "com.rendertom.flow",
+      "title": "Flow",
+      "url": "file:///C:/Program%20Files%20(x86)/Common%20Files/Adobe/CEP/extensions/flow/panel/index.html"
+    },
+    {
+      "port": 39828,
+      "pid": 14228,
+      "extId": "com.zayu.hook.panel",
+      "bundleId": "com.zayu.hook.panel",
+      "title": "杂鱼-蓝宝石&amp;BCC汉化",
+      "url": "file:///C:/Program%20Files%20(x86)/Common%20Files/Adobe/CEP/extensions/%E6%9D%82%E9%B1%BC-%E8%93%9D%E5%AE%9D%E7%9F%B3&BCC%E6%B1%89%E5%8C%96%E5%B7%A5%E5%85%B7/client/index.html"
+    },
+    {
+      "port": 39912,
+      "pid": 24812,
+      "extId": "cep.zh.test.panel",
+      "bundleId": "cep.zh.test",
+      "title": "CEP ZH Test",
+      "url": "file:///C:/Users/LEI/AppData/Roaming/Adobe/CEP/extensions/cep.zh.test/index.html"
+    },
+    {
+      "port": 39932,
+      "pid": 24832,
+      "extId": "com.overlord.panel",
+      "bundleId": "Overlord",
+      "title": "Overlord",
+      "url": "file:///C:/Program%20Files%20(x86)/Common%20Files/Adobe/CEP/extensions/Overlord/html/index.html"
+    },
+    {
+      "port": 39988,
+      "pid": 10388,
+      "extId": "com.overlord.panel",
+      "bundleId": "Overlord",
+      "title": "Overlord",
+      "url": "file:///C:/Program%20Files%20(x86)/Common%20Files/Adobe/CEP/extensions/Overlord/html/index.html"
+    },
+    {
+      "port": 40068,
+      "pid": 18468,
+      "extId": "com.overlord.panel",
+      "bundleId": "Overlord",
+      "title": "Overlord",
+      "url": "file:///C:/Program%20Files%20(x86)/Common%20Files/Adobe/CEP/extensions/Overlord/html/index.html"
+    }
+  ]
+}

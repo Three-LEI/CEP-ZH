@@ -1,0 +1,7 @@
+﻿{
+    "provider":  "none",
+    "baseUrl":  "https://api.deepseek.com",
+    "model":  "deepseek-flash",
+    "apiKey":  "",
+    "targetLang":  "zh-CN"
+}

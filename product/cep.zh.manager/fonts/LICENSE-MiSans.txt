@@ -1,0 +1,27 @@
+MiSans font notice
+==================
+
+The files MiSans-Regular.woff2 and MiSans-Medium.woff2 are unmodified official
+MiSans WebFont files from Xiaomi:
+
+  https://hyperos.mi.com/font/
+  https://hyperos.mi.com/font-download/MiSans.zip
+
+MiSans is free for global commercial use, including embedded fonts, under the
+MiSans Font Intellectual Property License Agreement:
+
+  https://hyperos.mi.com/font/download
+
+Required attribution (also shown in the manager's Settings screen):
+  "字体：MiSans © Xiaomi · 依据 MiSans 字体许可嵌入"
+
+License summary:
+- You may use MiSans in commercial products and embed it in software.
+- You must clearly state that MiSans is used in the software.
+- You may not adapt or redevelop the font or its individual components.
+- You may not separately rent, sublicense, give, lend or redistribute the font
+  software or copies of it. This restriction does not apply to works you create
+  with MiSans (posters, logos, apps, etc.).
+
+These files are embedded as-is; no subsetting, conversion, or other modification
+has been applied. If you replace them, keep this notice and the attribution.

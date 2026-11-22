@@ -1,0 +1,17 @@
+# MiSans is embedded in local builds but is not redistributed as standalone
+# font files in this public repository. Run tools/fonts/extract_misans.py.
+product/cep.zh.manager/fonts/*.woff2
+
+# Local test screenshots/artifacts
+test/*.png
+test/*.log
+test/*.json
+
+# Local toolchain/build caches
+node_modules/
+tools/bootstrap/tcc/
+*.zip
+*.7z
+*.tmp
+.DS_Store
+Thumbs.db

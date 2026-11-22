@@ -1,0 +1,31 @@
+{
+  "bundleId": "Overlord",
+  "extIds": [
+    "com.overlord.panel"
+  ],
+  "title": "Overlord",
+  "url": "file:///C:/Program%20Files%20(x86)/Common%20Files/Adobe/CEP/extensions/Overlord/html/index.html",
+  "updatedAt": "2026-11-22T05:04:28.502Z",
+  "strings": {
+    "Push selection to Ai": 2,
+    "Pull selection from Ai": 2,
+    "Split shapes to layers": 2,
+    "Detect parametric Rectangle/Ellipse": 2,
+    "Center anchor points": 2,
+    "Layers at comp center": 2,
+    "Switch to Ai": 2,
+    "Matching comp from artboard": 2,
+    "Matching artboard from comp": 2
+  },
+  "attrs": {
+    "Push selection to Ai": 2,
+    "Pull selection from Ai": 2,
+    "Split shapes to layers": 2,
+    "Detect parametric Rectangle/Ellipse": 2,
+    "Center anchor points": 2,
+    "Layers at comp center": 2,
+    "Switch to Ai": 2,
+    "Matching comp from artboard": 2,
+    "Matching artboard from comp": 2
+  }
+}
