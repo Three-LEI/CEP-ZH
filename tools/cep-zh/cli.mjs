@@ -29,6 +29,7 @@ import { canWriteDir } from './lib/net.mjs';
 import { discoverLivePanels, buildPortIndex, resolveLiveTarget } from './lib/live.mjs';
 import { listTargets, connect, evaluate } from './lib/cdp.mjs';
 import { EXTRACT_EXPR, mergeCatalog, saveCatalog, catalogPathFor } from './lib/catalog.mjs';
+import { writeDebugBaseline } from './lib/baseline.mjs';
 
 const TOOL_DIR = path.dirname(fileURLToPath(import.meta.url));
 const CATALOG_DIR = path.join(TOOL_DIR, 'catalog');
@@ -102,11 +103,10 @@ function cmdBaseline() {
   const scan = scanExtensions();
   const root = process.env.APPDATA ? path.join(process.env.APPDATA, 'CEP-ZH') : TOOL_DIR;
   const file = path.join(root, 'debug-baseline.json');
-  const paths = scan.bundles.map((b) => b.basePath.toLowerCase()).sort();
   try {
-    fs.mkdirSync(root, { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ updatedAt: new Date().toISOString(), paths }, null, 2));
-    console.log(`baseline: ${paths.length} extension paths -> ${file}`);
+    const entries = writeDebugBaseline(file, scan);
+    const withDebug = [...entries.values()].filter((v) => v.hasDebug).length;
+    console.log(`baseline: ${entries.size} extensions (${withDebug} with .debug) -> ${file}`);
     return 0;
   } catch (err) {
     console.error('baseline failed:', err.message);

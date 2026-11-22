@@ -13,6 +13,8 @@ import { listTargets, connect, evaluate } from './lib/cdp.mjs';
 import { EXTRACT_EXPR, mergeCatalog, saveCatalog, catalogPathFor } from './lib/catalog.mjs';
 import { isTranslatable, loadTranslationConfig, translateStrings } from './lib/translate-api.mjs';
 import { loadState } from './lib/ports.mjs';
+import { loadDebugBaseline, writeDebugBaseline } from './lib/baseline.mjs';
+import { canWriteDir } from './lib/net.mjs';
 
 const TOOL_DIR = path.dirname(fileURLToPath(import.meta.url));
 const CATALOG_DIR = path.join(TOOL_DIR, 'catalog');
@@ -42,7 +44,7 @@ const vlog = (...a) => { if (args.verbose) log(...a); };
 
 let scan = scanExtensions();
 let installedHosts = new Set(detectInstalledHosts());
-let debugBaseline = loadDebugBaseline();
+let debugBaseline = loadDebugBaseline(BASELINE_PATH);
 if (!debugBaseline) debugBaseline = createDebugBaseline();
 let dicts = loadDictionaries();
 let portIndex = buildPortIndex(scan);
@@ -118,23 +120,21 @@ function resolve(port, page) {
   return resolveLiveTarget(scan, portIndex, { port, page: page || {} });
 }
 
-function loadDebugBaseline() {
-  try {
-    const doc = JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8').replace(/^\uFEFF/, ''));
-    if (Array.isArray(doc.paths)) return new Set(doc.paths.map((p) => String(p).toLowerCase()));
-  } catch {}
-  return null;
-}
-
 function createDebugBaseline() {
-  const paths = scan.bundles.map((b) => b.basePath.toLowerCase()).sort();
   try {
-    fs.mkdirSync(USER_ROOT, { recursive: true });
-    fs.writeFileSync(BASELINE_PATH, JSON.stringify({ updatedAt: new Date().toISOString(), paths }, null, 2));
+    return writeDebugBaseline(BASELINE_PATH, scan);
   } catch (err) {
     vlog('debug baseline write failed', err.message);
+    return debugBaseline || new Map();
   }
-  return new Set(paths);
+}
+
+function refreshDebugBaseline() {
+  try {
+    debugBaseline = writeDebugBaseline(BASELINE_PATH, scan);
+  } catch (err) {
+    vlog('debug baseline refresh failed', err.message);
+  }
 }
 
 function pendingDebug() {
@@ -143,11 +143,12 @@ function pendingDebug() {
     if (!bundle || bundle.hasDebugFile) continue;
     const bundleId = String(bundle.bundleId || '');
     if (!bundleId || bundleId.startsWith('cep.zh.')) continue;
-    if (debugBaseline && debugBaseline.has(String(bundle.basePath).toLowerCase())) continue;
+    const known = debugBaseline && debugBaseline.get(String(bundle.basePath).toLowerCase().replace(/\\/g, '/').replace(/\/+$/, ''));
+    if (known && known.hasDebug === true) continue;
     const hosts = (bundle.hosts || []).map((h) => h.name).filter((h) => installedHosts.has(h));
     if (!hosts.length) continue;
     let writable = false;
-    try { fs.accessSync(bundle.basePath, fs.constants.W_OK); writable = true; } catch {}
+    try { writable = canWriteDir(bundle.basePath); } catch {}
     out.push({ bundleId, path: bundle.basePath, hosts, writable });
   }
   return out;
@@ -382,6 +383,7 @@ function repairPendingDebug(token) {  const pending = pendingDebug();
     } catch (err) {
       vlog('post-repair rescan failed', err.message);
     }
+    refreshDebugBaseline();
     const remaining = pendingDebug().length;
     const status = remaining === 0 ? 'done' : (needElevate ? 'elevated' : 'error');
     lastRepair = {
@@ -430,6 +432,7 @@ function autoRepairWritable() {
     } catch (err) {
       vlog('auto-debug rescan failed', err.message);
     }
+    refreshDebugBaseline();
     const remaining = pendingDebug().length;
     lastAutoDebug = {
       at: new Date().toISOString(),
