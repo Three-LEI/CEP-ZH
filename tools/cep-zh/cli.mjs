@@ -216,7 +216,9 @@ async function cmdEnable(argv) {
   if (skipped.length) {
     if (values.elevate && process.platform === 'win32') {
       console.log('\nrequesting elevation...');
-      const args = process.argv.slice(2).filter((a) => a !== '--elevate');
+      // process.argv.slice(2) starts at the CLI verb; the elevated Node process
+      // also needs the script path before it, or Node exits 1 immediately.
+      const args = [process.argv[1], ...process.argv.slice(2).filter((a) => a !== '--elevate')];
       const quoted = args.map((a) => "'" + String(a).replace(/'/g, "''") + "'").join(',');
       const node = process.execPath.replace(/'/g, "''");
       const cmd = `$p = Start-Process -FilePath '${node}' -ArgumentList @(${quoted}) -Verb RunAs -Wait -PassThru; exit $p.ExitCode`;
