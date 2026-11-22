@@ -722,6 +722,7 @@
     var pending = pendingDebug();
     var badge = $('debugBadge');
     var notice = $('debugNotice');
+    var overlay = $('debugOverlay');
     if (!badge || !notice) return;
 
     var n = pending.length;
@@ -730,6 +731,7 @@
 
     if (!n) {
       notice.classList.add('hidden');
+      if (overlay) overlay.classList.add('hidden');
       document.body.classList.remove('has-debug');
       S.debugSig = '';
       return;
@@ -739,6 +741,7 @@
     S.debugSig = sig;
     if (S.debugDismissed === sig) {
       notice.classList.add('hidden');
+      if (overlay) overlay.classList.add('hidden');
       document.body.classList.remove('has-debug');
       return;
     }
@@ -756,6 +759,7 @@
     $('debugSub').textContent = sub;
     $('btnRepairDebug').disabled = !!S.repairToken;
     notice.classList.remove('hidden');
+    if (overlay) overlay.classList.remove('hidden');
     document.body.classList.add('has-debug');
   }
 
@@ -1068,7 +1072,7 @@
     loadControl();
     loadAgent();
     S.lastTranslationSeen = (S.agent && S.agent.translation && S.agent.translation.token) || '';
-    var theme = 'light';
+    var theme = 'dark';
     try {
       var saved = localStorage.getItem('cepzh.theme.v2');
       if (saved === 'light' || saved === 'dark') theme = saved;

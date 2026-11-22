@@ -221,50 +221,68 @@ code { font-family: var(--mono); font-size: 0.875rem; color: var(--muted); }
 
 /* ---------- legacy .debug notice ---------- */
 body { --debug-h: 0px; }
-body.has-debug { --debug-h: 58px; }
+body.has-debug { --debug-h: 68px; }
+.debug-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  inset: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.62);
+}
 .debug-notice {
   position: relative;
-  z-index: 2;
+  z-index: 30;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   height: var(--debug-h);
-  padding: 8px 18px;
+  padding: 9px 18px;
   box-sizing: border-box;
   border-bottom: 1px solid var(--line-2);
-  border-left: 3px solid var(--accent);
-  background: var(--panel);
+  border-left: 4px solid var(--accent);
+  background: var(--panel-2);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
   overflow: hidden;
 }
 .debug-mark {
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
   display: grid;
   place-items: center;
   border: 1px solid var(--accent);
-  color: var(--accent);
-  font: 0.75rem/1 var(--mono);
+  background: var(--accent);
+  color: #fff;
+  font: 1rem/1 var(--mono);
 }
 .debug-copy { min-width: 0; flex: 1; }
 .debug-title {
   color: var(--fg);
-  font-size: 0.917rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .debug-sub {
-  margin-top: 3px;
+  margin-top: 4px;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.debug-actions { display: flex; gap: 6px; flex: 0 0 auto; }
-.debug-actions .btn { padding: 5px 9px; font-size: 0.833rem; }
+.debug-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+.debug-actions .btn { padding: 7px 12px; font-size: 0.875rem; }
+.debug-actions .btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
 
 /* ---------- layout ---------- */
 .layout {
@@ -633,7 +651,7 @@ tbody td { padding: 4px 9px; vertical-align: middle; }
   left: 50%;
   bottom: 44px;
   transform: translate(-50%, 10px);
-  z-index: 20;
+  z-index: 40;
   max-width: 82vw;
   padding: 7px 12px;
   border: 1px solid var(--accent);
