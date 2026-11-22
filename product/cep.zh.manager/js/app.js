@@ -740,7 +740,7 @@
     var all = $('btnRepairAllDebug');
     if (all) {
       var count = pendingDebug().length;
-      all.disabled = !!S.repairToken || count === 0;
+      all.disabled = !!S.repairToken || repairRunning() || count === 0;
       all.textContent = count ? ('修复全部 .debug · ' + count) : '修复全部 .debug';
     }
   }
@@ -749,8 +749,17 @@
     return S.agent && Array.isArray(S.agent.pendingDebug) ? S.agent.pendingDebug : [];
   }
 
+  function repairRunning() {
+    var rep = S.agent && S.agent.lastRepair;
+    return !!(rep && rep.status === 'running');
+  }
+
   function requestDebugRepair() {
     if (S.repairToken) return;
+    if (repairRunning()) {
+      toast('修复正在进行，请等待当前管理员进程完成');
+      return;
+    }
     if (!pendingDebug().length) {
       toast('没有缺失 .debug 的插件');
       return;
@@ -803,10 +812,11 @@
 
     $('debugTitle').textContent = title;
     $('debugSub').textContent = sub;
-    $('btnRepairDebug').disabled = !!S.repairToken;
+    var busy = !!S.repairToken || repairRunning();
+    $('btnRepairDebug').disabled = busy;
     var all = $('btnRepairAllDebug');
     if (all) {
-      all.disabled = !!S.repairToken || n === 0;
+      all.disabled = busy || n === 0;
       all.textContent = n ? ('修复全部 .debug · ' + n) : '修复全部 .debug';
     }
     notice.classList.remove('hidden');
