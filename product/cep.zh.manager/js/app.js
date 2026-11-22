@@ -222,10 +222,35 @@
   function setGlobalEnabled(enabled) {
     saveControl({ enabled: enabled });
     $('globalToggle').checked = enabled;
+    if ($('compactToggle')) $('compactToggle').checked = enabled;
+    renderCompactStatus();
     $('agentStatus').textContent = 'AGENT / APPLYING…';
     toast(enabled ? '已开启全局汉化' : '已请求恢复原文');
     setTimeout(refreshAgent, 280);
     setTimeout(refreshAgent, 1100);
+  }
+
+  function applyCompactMode() {
+    var width = document.documentElement.clientWidth || window.innerWidth || 0;
+    var height = document.documentElement.clientHeight || window.innerHeight || 0;
+    var compact = width > 0 && height > 0 && (width < 500 || height < 460);
+    var micro = compact && (width < 320 || height < 320);
+    document.body.classList.toggle('compact', compact);
+    document.body.classList.toggle('micro', micro);
+    var toggle = $('compactToggle');
+    if (toggle) toggle.checked = S.control.enabled;
+    renderCompactStatus();
+  }
+
+  function renderCompactStatus() {
+    var state = $('compactState');
+    var agent = $('compactAgent');
+    if (state) state.textContent = S.control.enabled ? '已开启' : '已关闭';
+    if (agent) {
+      if (!S.agent || !agentFresh()) agent.textContent = 'AGENT / OFFLINE';
+      else if (S.translationRunning) agent.textContent = 'AGENT / TRANSLATING';
+      else agent.textContent = 'AGENT / RUNNING · ' + ((S.agent.panels || []).length) + ' PANELS';
+    }
   }
 
   function hostInfo() {
@@ -826,6 +851,7 @@
       else toast(auto.message || '部分新插件需要手动修复', 5200);
     }
     renderDebugNotice();
+    renderCompactStatus();
     updateTranslationUI();
     if (S.view === 'settings') renderSettings();
   }
@@ -917,6 +943,11 @@
     $('globalToggle').onchange = function () {
       setGlobalEnabled(this.checked);
     };
+    if ($('compactToggle')) {
+      $('compactToggle').onchange = function () {
+        setGlobalEnabled(this.checked);
+      };
+    }
     $('btnRestore').onclick = function () {
       setGlobalEnabled(false);
     };
@@ -1056,6 +1087,8 @@
       }
     }
     $('globalToggle').checked = S.control.enabled;
+    if ($('compactToggle')) $('compactToggle').checked = S.control.enabled;
+    applyCompactMode();
     if (S.view === 'plugin' && S.key) {
       var disabled = S.control.disabledPlugins.indexOf(S.key) >= 0;
       $('pluginToggle').checked = !disabled;
@@ -1101,7 +1134,10 @@
     switchView('plugin');
     refreshAgent();
     $('globalToggle').checked = S.control.enabled;
+    if ($('compactToggle')) $('compactToggle').checked = S.control.enabled;
     S.sig = dataSignature();
+    applyCompactMode();
+    window.addEventListener('resize', applyCompactMode);
     setInterval(poll, 1200);
   }
 

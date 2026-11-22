@@ -301,6 +301,144 @@ body.has-debug { --debug-h: 68px; }
   border-right: 1px solid var(--line);
   background: var(--panel);
 }
+
+/* compact mode: only the global switch survives */
+.compact-view { display: none; }
+body.compact .topbar,
+body.compact .layout,
+body.compact .statusbar { display: none; }
+body.compact .compact-view {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - var(--debug-h));
+  padding: 18px;
+  box-sizing: border-box;
+}
+.compact-inner {
+  width: 100%;
+  max-width: 280px;
+  padding: 20px 18px;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  text-align: center;
+}
+.compact-brand {
+  color: var(--accent);
+  font: 0.75rem/1 var(--mono);
+  letter-spacing: 2px;
+}
+.compact-title {
+  margin-top: 12px;
+  color: var(--fg);
+  font-size: 1.167rem;
+  font-weight: 600;
+}
+.compact-switch {
+  display: inline-flex;
+  margin: 18px 0 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.compact-switch input { position: absolute; opacity: 0; pointer-events: none; }
+.compact-track {
+  width: 68px;
+  height: 34px;
+  padding: 3px;
+  box-sizing: border-box;
+  border: 1px solid var(--line-2);
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+.compact-thumb {
+  width: 26px;
+  height: 26px;
+  background: var(--muted);
+  transition: transform 0.15s, background 0.15s;
+}
+.compact-switch input:checked + .compact-track {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.compact-switch input:checked + .compact-track .compact-thumb {
+  transform: translateX(32px);
+  background: var(--accent);
+}
+.compact-switch input:focus-visible + .compact-track {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+.compact-state {
+  color: var(--fg);
+  font-size: 0.917rem;
+  font-weight: 600;
+}
+.compact-agent {
+  margin-top: 8px;
+  color: var(--muted);
+  font: 0.75rem/1.4 var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compact-action,
+.compact-note,
+.compact-micro-label { display: none; }
+.compact-note {
+  margin-top: 10px;
+  color: var(--muted);
+  font: 0.75rem/1.5 var(--ui);
+  text-align: left;
+  white-space: normal;
+}
+
+/* micro mode: 150x200-ish panel, only the slide switch + note */
+body.micro .compact-view { padding: 8px; }
+body.micro .compact-inner {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  padding: 12px 10px;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+body.micro .compact-brand,
+body.micro .compact-title,
+body.micro .compact-state,
+body.micro .compact-agent { display: none; }
+body.micro .compact-micro-label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--accent);
+  font: 0.75rem/1 var(--mono);
+  letter-spacing: 1px;
+}
+body.micro .compact-switch { display: inline-flex; margin: 0 0 10px; }
+body.micro .compact-track {
+  width: 54px;
+  height: 26px;
+  padding: 2px;
+}
+body.micro .compact-thumb { width: 20px; height: 20px; }
+body.micro .compact-switch input:checked + .compact-track .compact-thumb {
+  transform: translateX(26px);
+}
+body.micro .compact-note {
+  display: block;
+  width: 100%;
+  margin-top: 0;
+  text-align: center;
+}
 .side-nav { display: flex; flex-direction: column; border-top: 1px solid var(--line-2); }
 .nav-item {
   position: relative;

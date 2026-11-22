@@ -42,8 +42,8 @@
               <Width>560</Width>
             </Size>
             <MinSize>
-              <Height>420</Height>
-              <Width>420</Width>
+              <Height>200</Height>
+              <Width>150</Width>
             </MinSize>
           </Geometry>
         </UI>
