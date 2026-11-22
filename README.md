@@ -9,6 +9,14 @@
 已在 **After Effects 2026 (26.5) / CEP 12.0.1 / CEF 99 (Chromium 99)** 上完成端到端验证；
 CEP 9–12 的面板都走同一套 `CEPHtmlEngine` + CEF 架构，机制上通用。
 
+版本边界要分清：
+
+- **注入 / 翻译运行时**：CEP 9–12 通用，`.debug` + CDP 即可；AE CC 2019（CEP 9.3.1）已有实测成功反馈；
+- **代理 `VCRUNTIME140_1.dll` 引导**：只针对 CEP 12 / CEF 99 的 `cef_settings_t` 布局，
+  旧版不要复用同一个 DLL，继续用 `.debug`。AE2019 的 CEP 9 引擎使用 `msvcr120/msvcp120`，
+  不会静态加载 `VCRUNTIME140_1.dll`，代理放进去也不会生效。
+- 管理面板 UI 在旧版 Chromium 上可能有 CSS 兼容差异；核心注入不受影响。
+
 ![Flow 汉化前](docs/screenshots/01-flow-before.png)
 ![Flow 汉化后](docs/screenshots/02-flow-after.png)
 
@@ -40,7 +48,42 @@ tools\bootstrap\install-proxy.cmd
 node tools\cep-zh\cli.mjs agent
 ```
 
-### 一键本地安装（测试版，尚未打包）
+### AE2019 / CEP 9–11：用 `.debug`，不要用代理
+
+AE CC 2019 是 CEP 9.3.1，`CEPHtmlEngine.exe` 使用 `msvcr120/msvcp120`，
+不会加载 `VCRUNTIME140_1.dll`；即使复制进去也不会执行。旧版请运行：
+
+```bat
+:: 默认只处理 AEFT；可加 -Hosts PHXS,PPRO...
+powershell -ExecutionPolicy Bypass -File installer\legacy-debug.ps1 -Hosts AEFT -DryRun
+powershell -ExecutionPolicy Bypass -File installer\legacy-debug.ps1 -Hosts AEFT
+
+:: 系统扩展目录需要管理员时加 -Elevate
+:: 已自带 .debug 的扩展会显示 unchanged
+```
+
+然后完全退出并重启 AE，确认 Agent：
+
+```bat
+node tools\cep-zh\cli.mjs agent --verbose
+```
+
+### 原生安装器（C++ / Direct2D）
+
+面向最终用户的单文件安装器在 [installer/native](installer/native/README.md)。
+它不是把 CEP 文件塞进 exe，而是运行时从 GitHub 下载：
+
+- ① 安装管理面板、Agent 与 Node 便携运行时；
+- ② CEP12 安装引擎级代理（后续新插件自动生效）；旧版 CEP 扫描 `.debug`，已有跳过，缺失时自动写入；
+- 自动创建桌面快捷方式；卸载时恢复/清理 `.debug`、移除扩展与 Agent；
+- 固定窗口，不可拉伸/最大化，按屏幕工作区自动缩放；
+- 申请管理员权限，写系统扩展目录。
+
+构建产物：`installer/native/dist/CepZhInstaller.exe`（单文件，静态 CRT）。
+
+![安装器](docs/screenshots/16-installer.png)
+
+### 一键本地安装（PowerShell 测试版）
 
 `installer/install.ps1` 会一次完成：扫描 CEP 引擎 → 安装代理 → 安装 Manager/Agent 扩展 →
 写 Agent 配置 → 写 HKCU 卸载入口。已在非管理员会话下跑通
@@ -70,6 +113,8 @@ Manager 已改成明日方舟式“点线面”极简编辑器：
 - 默认 **亮色**（更接近 three-lei.cn 的白色排版），右上角 LIGHT / DARK 切换；暗色已降低对比度，不刺眼；
 - 标题旁署名 `three-lei × deepseek` 与版本 `v0.2.0`；
 - 全局“汉化 / 恢复原文”和单插件开关，Agent 实时响应；
+- **新增插件检测**：Agent 每 15 秒重扫；新扩展缺少 `.debug` 时，用户目录自动补写，
+  系统目录在管理面板顶部显示横幅/侧栏红点，一键修复（UAC）；
 - 字典自动解析成 **虚拟编辑表**（原文 / 译文 / 状态 / 分页），不再手写 JSON；
 - **搜索分离**：左侧“搜索插件”只筛插件，表格内“搜索原文或译文”只筛当前字典；
 - 插件字典优先，空译文自动回退公共字典；
@@ -300,6 +345,7 @@ node tools\cep-zh\cli.mjs disable
 - **自动缩放**：字号随面板/系统缩放自动调整，无手动缩放控件。
 - **单词收集**：新开 CEP 面板自动提取文本/属性写入插件字典，空译文显示“未翻译”，
   显式捕获只补缺失词条、不覆盖已有翻译；
+- **旧版 CEP**：AE CC 2019 / CEP 9.3.1 的 `.debug` 路线已有实测成功反馈；代理 DLL 仍只针对 CEP 12；
 - Flow / Overlord / 自建测试面板的文本与属性翻译；
 - 动态文本（每 900ms 更新）、`patterns` 正则、iframe、Shadow DOM；
 - 面板 `location.reload()` 后由常驻 Agent 自动重新注入；

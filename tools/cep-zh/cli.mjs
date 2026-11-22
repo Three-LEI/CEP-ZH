@@ -3,6 +3,7 @@
 //
 //   node cli.mjs scan     [--hosts AEFT,PPRO] [--only flow] [--json]
 //   node cli.mjs enable   [--hosts ...] [--only ...] [--start 39300] [--dry-run] [--elevate]
+//   node cli.mjs baseline  record current extension paths for new-plugin detection
 //   node cli.mjs disable
 //   node cli.mjs status
 //   node cli.mjs agent    [--once] [--catalog] [--verbose]
@@ -95,6 +96,22 @@ function cmdScan(argv) {
     for (const e of scan.errors.slice(0, 5)) console.log('  ', e.manifestPath, '-', e.error);
   }
   return 0;
+}
+
+function cmdBaseline() {
+  const scan = scanExtensions();
+  const root = process.env.APPDATA ? path.join(process.env.APPDATA, 'CEP-ZH') : TOOL_DIR;
+  const file = path.join(root, 'debug-baseline.json');
+  const paths = scan.bundles.map((b) => b.basePath.toLowerCase()).sort();
+  try {
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ updatedAt: new Date().toISOString(), paths }, null, 2));
+    console.log(`baseline: ${paths.length} extension paths -> ${file}`);
+    return 0;
+  } catch (err) {
+    console.error('baseline failed:', err.message);
+    return 1;
+  }
 }
 
 async function cmdEnable(argv) {
@@ -360,6 +377,7 @@ let code = 0;
 switch (command) {
   case 'scan': code = cmdScan(rest); break;
   case 'enable': code = await cmdEnable(rest); break;
+  case 'baseline': code = cmdBaseline(); break;
   case 'disable': code = cmdDisable(rest); break;
   case 'status': code = await cmdStatus(rest); break;
   case 'catalog': code = await cmdCatalog(rest); break;

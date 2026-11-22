@@ -40,10 +40,22 @@
     </div>
   </header>
 
+  <section id="debugNotice" class="debug-notice hidden" role="status" aria-live="polite">
+    <div class="debug-mark" aria-hidden="true">!</div>
+    <div class="debug-copy">
+      <div class="debug-title" id="debugTitle">发现新插件需要配置调试端口</div>
+      <div class="debug-sub" id="debugSub"></div>
+    </div>
+    <div class="debug-actions">
+      <button id="btnRepairDebug" class="btn primary" type="button">立即修复</button>
+      <button id="btnDismissDebug" class="btn" type="button">稍后</button>
+    </div>
+  </section>
+
   <div class="layout">
     <aside class="sidebar">
       <nav class="side-nav" aria-label="主导航">
-        <button class="nav-item active" data-view="plugin"><span class="nav-idx">01</span><span>插件字典</span></button>
+        <button class="nav-item active" data-view="plugin"><span class="nav-idx">01</span><span>插件字典</span><span id="debugBadge" class="nav-badge hidden">0</span></button>
         <button class="nav-item" data-view="global"><span class="nav-idx">02</span><span>公共字典</span></button>
         <button class="nav-item" data-view="settings"><span class="nav-idx">03</span><span>设置</span></button>
         <button class="nav-item" data-view="export"><span class="nav-idx">04</span><span>导出 / 导入</span></button>

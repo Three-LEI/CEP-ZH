@@ -1,4 +1,4 @@
-﻿/*
+/*
  * cepzh-hook.dll - loaded into CEPHtmlEngine.exe before its entry point.
  *
  * It patches the IAT entry for cef_initialize and forces
@@ -14,8 +14,8 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
-#define CEF99_SETTINGS_PORT_OFFSET 372
-#define CEF99_SETTINGS_MIN_SIZE (372 + 4)
+#define CEF99_SETTINGS_PORT_OFFSET 316
+#define CEF99_SETTINGS_MIN_SIZE (316 + 4)
 
 typedef int (__cdecl *cef_initialize_fn)(const void *args, void *settings, void *app, void *sandbox_info);
 
@@ -98,6 +98,21 @@ static int __cdecl hook_cef_initialize(const void *args, void *settings, void *a
     return 0;
 }
 
+static int patch_iat(void);
+static DWORD WINAPI patch_thread(LPVOID p) {
+    int i;
+    (void)p;
+    for (i = 0; i < 20000; i++) {
+        if (patch_iat()) {
+            log_line("IAT patched cef_initialize=%p", (void *)g_real_cef_initialize);
+            return 0;
+        }
+        Sleep(1);
+    }
+    log_line("IAT patch FAILED");
+    return 0;
+}
+
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
     char port_buf[32];
     char temp[MAX_PATH];
@@ -112,8 +127,7 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
     g_port = port_buf[0] ? atoi(port_buf) : 0;
 
     log_line("DllMain pid=%lu port=%d", (unsigned long)GetCurrentProcessId(), g_port);
-    if (patch_iat()) log_line("IAT patched cef_initialize=%p", (void *)g_real_cef_initialize);
-    else log_line("IAT patch FAILED");
+    CreateThread(NULL, 0, patch_thread, NULL, 0, NULL);
     return TRUE;
 }
 

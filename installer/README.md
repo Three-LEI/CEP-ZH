@@ -48,9 +48,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File installer\install.ps1 -Unins
 - Node.js **18+**（18 没有全局 WebSocket，Agent 用内置 `lib/ws.mjs`；22+ 用原生 WebSocket）；
 - 写 `C:\Program Files` 下的引擎需要管理员；`D:\Adobe` 等自定义安装通常不需要。
 
+## AE2019 / CEP 9–11
+
+不要安装 `VCRUNTIME140_1.dll` 代理：AE2019 的 CEP 9 使用 `msvcr120/msvcp120`，
+不会加载该 DLL。改用官方 `.debug`：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File installer\legacy-debug.ps1 -Hosts AEFT -DryRun
+powershell -ExecutionPolicy Bypass -File installer\legacy-debug.ps1 -Hosts AEFT
+```
+
+系统目录需要管理员时加 `-Elevate`。脚本会复用 `cli.mjs enable` 的端口分配和备份逻辑。
+
 ## 已知限制
 
-- 只验证 CEP 12 / CEF 99；旧版请用 `.debug` 模式；
+- 代理只验证 CEP 12 / CEF 99；旧版请用 `legacy-debug.ps1`（官方 `.debug`）；
 - 安装脚本会修改 Adobe 引擎目录，必须先备份并保留卸载入口；
 - 卸载入口写在 HKCU，适合当前用户；多用户机器需要各自安装/卸载；
 - `UninstallString` 当前指向仓库里的 `installer\install.ps1`，最终安装包应把脚本复制到安装目录；

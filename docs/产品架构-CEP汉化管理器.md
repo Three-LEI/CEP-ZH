@@ -85,9 +85,11 @@ D:\Adobe\Adobe Photoshop 2026\Required\CEP\CEPHtmlEngine\
 
 ### 3.3 兼容性
 
+- **注入核心**：`.debug` + CDP + runtime 对 CEP 9–12 通用；AE CC 2019（CEP 9.3.1）已有实测成功反馈；
 - 已验证：**CEP 12 / CEF 99** 的 AE 2026、AI 2026、PS 2026、PR 2026 引擎二进制；
 - AE 2025 也是 CEP 12，安装器会处理，但未做真实面板回归；
 - **CEP 11 / 9 不能直接复用**：CEF 88/61 的 `cef_settings_t` 布局可能不同，偏移 372 不保证正确；
+  AE2019/CEP 9 使用 `msvcr120/msvcp120`，没有 `VCRUNTIME140_1.dll` 静态导入，代理根本不会加载；
   安装器默认只处理 CEP 12，旧版回退 `.debug` 或另做对应版本的代理；
 - Adobe 升级可能覆盖代理，安装器/启动器应检测并提示重装。
 

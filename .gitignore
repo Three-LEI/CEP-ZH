@@ -10,6 +10,14 @@ test/*.json
 # Local toolchain/build caches
 node_modules/
 tools/bootstrap/tcc/
+tools/cep-zh/state.json
+installer/native/build/
+installer/native/dist/
+installer/native/*.png
+installer/native/*.map
+installer/native/*.pdb
+installer/native/*.ilk
+*.obj
 *.zip
 *.7z
 *.tmp

@@ -58,22 +58,21 @@ static const WCHAR *args_part(const WCHAR *cmd) {
 
 int wmain(int argc, WCHAR **argv) {
     WCHAR self[MAX_PATH], dir[MAX_PATH], real[MAX_PATH], hook[MAX_PATH], cmd[32768];
-    WCHAR port_buf[32], log_dir[MAX_PATH];
+    WCHAR port_buf[32], log_dir[MAX_PATH], log_path_w[MAX_PATH];
     WCHAR *cmdline;
     STARTUPINFOW si;
     PROCESS_INFORMATION pi;
-    CONTEXT ctx;
-    SIZE_T path_bytes, code_len;
+    SIZE_T path_bytes;
     void *remote;
-    unsigned char code[64];
-    int n = 0, port;
-    ULONG_PTR path_addr, load_lib, entry;
-    DWORD old_protect;
+    HANDLE thread;
+    DWORD thread_exit = 0;
+    FARPROC load_lib;
+    int port;
     (void)argc; (void)argv;
 
     GetTempPathW(MAX_PATH, log_dir);
-    _snwprintf(g_log_path, MAX_PATH, L"%scepzh-launcher.log", log_dir);
-    WideCharToMultiByte(CP_ACP, 0, g_log_path, -1, g_log_path, MAX_PATH, NULL, NULL);
+    _snwprintf(log_path_w, MAX_PATH, L"%scepzh-launcher.log", log_dir);
+    WideCharToMultiByte(CP_ACP, 0, log_path_w, -1, g_log_path, MAX_PATH, NULL, NULL);
 
     GetModuleFileNameW(NULL, self, MAX_PATH);
     dir_of(self, dir);
@@ -105,50 +104,36 @@ int wmain(int argc, WCHAR **argv) {
         return 2;
     }
 
-    ZeroMemory(&ctx, sizeof(ctx));
-    ctx.ContextFlags = CONTEXT_FULL;
-    if (!GetThreadContext(pi.hThread, &ctx)) {
-        log_line("GetThreadContext failed %lu", (unsigned long)GetLastError());
-        TerminateProcess(pi.hProcess, 3);
-        return 3;
-    }
-    entry = ctx.Rip;
-
-    remote = VirtualAllocEx(pi.hProcess, NULL, 8192, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    remote = VirtualAllocEx(pi.hProcess, NULL, 8192, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (!remote) {
         log_line("VirtualAllocEx failed %lu", (unsigned long)GetLastError());
         TerminateProcess(pi.hProcess, 4);
         return 4;
     }
-    path_addr = (ULONG_PTR)remote;
     path_bytes = (wcslen(hook) + 1) * sizeof(WCHAR);
-
-    code[n++] = 0x48; code[n++] = 0x83; code[n++] = 0xEC; code[n++] = 0x28;             /* sub rsp,28h */
-    code[n++] = 0x48; code[n++] = 0xB9; memcpy(code + n, &path_addr, 8); n += 8;          /* mov rcx,path */
-    load_lib = (ULONG_PTR)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "LoadLibraryW");
-    code[n++] = 0x48; code[n++] = 0xB8; memcpy(code + n, &load_lib, 8); n += 8;           /* mov rax,LoadLibraryW */
-    code[n++] = 0xFF; code[n++] = 0xD0;                                                   /* call rax */
-    code[n++] = 0x48; code[n++] = 0x83; code[n++] = 0xC4; code[n++] = 0x28;             /* add rsp,28h */
-    code[n++] = 0x48; code[n++] = 0xB8; memcpy(code + n, &entry, 8); n += 8;              /* mov rax,entry */
-    code[n++] = 0xFF; code[n++] = 0xE0;                                                   /* jmp rax */
-    code_len = (SIZE_T)n;
-
-    if (!WriteProcessMemory(pi.hProcess, (void *)path_addr, (void *)hook, path_bytes, NULL) ||
-        !WriteProcessMemory(pi.hProcess, (void *)((ULONG_PTR)remote + 0x400), code, code_len, NULL)) {
+    if (!WriteProcessMemory(pi.hProcess, remote, hook, path_bytes, NULL)) {
         log_line("WriteProcessMemory failed %lu", (unsigned long)GetLastError());
         TerminateProcess(pi.hProcess, 5);
         return 5;
     }
-    VirtualProtectEx(pi.hProcess, (void *)path_addr, 8192, PAGE_EXECUTE_READWRITE, &old_protect);
-    ctx.Rip = (DWORD64)((ULONG_PTR)remote + 0x400);
-    if (!SetThreadContext(pi.hThread, &ctx)) {
-        log_line("SetThreadContext failed %lu", (unsigned long)GetLastError());
+    load_lib = GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "LoadLibraryW");
+    thread = CreateRemoteThread(pi.hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)load_lib, remote, 0, NULL);
+    if (!thread) {
+        log_line("CreateRemoteThread failed %lu", (unsigned long)GetLastError());
         TerminateProcess(pi.hProcess, 6);
         return 6;
     }
+    WaitForSingleObject(thread, 10000);
+    GetExitCodeThread(thread, &thread_exit);
+    CloseHandle(thread);
+    if (!thread_exit) {
+        log_line("LoadLibraryW returned 0");
+        TerminateProcess(pi.hProcess, 7);
+        return 7;
+    }
     ResumeThread(pi.hThread);
     CloseHandle(pi.hThread);
-    log_line("resumed child pid=%lu entry=%p shellcode=%p", (unsigned long)pi.dwProcessId, (void *)entry, (void *)ctx.Rip);
+    log_line("resumed child pid=%lu hook=%ls module=%p", (unsigned long)pi.dwProcessId, hook, (void *)(ULONG_PTR)thread_exit);
     WaitForSingleObject(pi.hProcess, INFINITE);
     {
         DWORD code_exit = 0;

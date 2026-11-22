@@ -49,6 +49,11 @@
     importOverwrite: false,
     translationRunning: false,
     lastTranslationSeen: '',
+    debugDismissed: '',
+    debugSig: '',
+    repairToken: '',
+    repairToastToken: '',
+    lastAutoSeen: '',
   };
 
   function $(id) { return document.getElementById(id); }
@@ -709,6 +714,51 @@
     $('agentDetail').textContent = lines.join('\n');
   }
 
+  function pendingDebug() {
+    return S.agent && Array.isArray(S.agent.pendingDebug) ? S.agent.pendingDebug : [];
+  }
+
+  function renderDebugNotice() {
+    var pending = pendingDebug();
+    var badge = $('debugBadge');
+    var notice = $('debugNotice');
+    if (!badge || !notice) return;
+
+    var n = pending.length;
+    badge.textContent = String(n);
+    badge.classList.toggle('hidden', n === 0);
+
+    if (!n) {
+      notice.classList.add('hidden');
+      document.body.classList.remove('has-debug');
+      S.debugSig = '';
+      return;
+    }
+
+    var sig = pending.map(function (p) { return p.path || p.bundleId || ''; }).join('|');
+    S.debugSig = sig;
+    if (S.debugDismissed === sig) {
+      notice.classList.add('hidden');
+      document.body.classList.remove('has-debug');
+      return;
+    }
+
+    var names = pending.slice(0, 2).map(function (p) {
+      return p.bundleId || p.path || '未命名插件';
+    }).join('、');
+    var unwritable = pending.filter(function (p) { return !p.writable; }).length;
+    var title = '发现 ' + n + ' 个新插件缺少 .debug';
+    var sub = names + (n > 2 ? ' 等' : '') + ' · CEP9–11 需要补写；CEP12 代理已覆盖的插件可忽略。';
+    if (unwritable) sub += ' 系统目录将请求管理员权限。';
+    if (S.repairToken) sub = '已请求修复，正在等待 Agent / 管理员写入…';
+
+    $('debugTitle').textContent = title;
+    $('debugSub').textContent = sub;
+    $('btnRepairDebug').disabled = !!S.repairToken;
+    notice.classList.remove('hidden');
+    document.body.classList.add('has-debug');
+  }
+
   function refreshAgent() {
     loadAgent();
     var fresh = agentFresh();
@@ -747,6 +797,31 @@
         }, 260);
       }
     }
+    var rep = S.agent && S.agent.lastRepair;
+    if (S.repairToken && rep && rep.token === S.repairToken && rep.status !== 'running') {
+      var remaining = pendingDebug().length;
+      var failed = rep.status === 'error';
+      var finished = rep.status === 'done' || (rep.status === 'elevated' && remaining === 0);
+      var stale = rep.status === 'elevated' && rep.at && (Date.now() - Date.parse(rep.at) > 20000);
+      if (finished || failed || stale) {
+        if (S.repairToastToken !== rep.token) {
+          S.repairToastToken = rep.token;
+          if (finished) toast(rep.message || '已写入 .debug，请重启 Adobe 应用', 5000);
+          else toast(failed ? ('修复失败：' + (rep.message || '未知错误')) : '等待管理员写入超时，可重试', 5000);
+        }
+        S.repairToken = '';
+        saveControl({ repairDebugToken: '' });
+        setTimeout(refreshAgent, 400);
+      }
+    }
+    var auto = S.agent && S.agent.lastAutoDebug;
+    if (auto && auto.at && auto.count > 0 && auto.at !== S.lastAutoSeen &&
+        Date.now() - Date.parse(auto.at) < 120000) {
+      S.lastAutoSeen = auto.at;
+      if (auto.status === 'done') toast(auto.message || '新插件已自动写入 .debug，请重启 Adobe 应用', 5200);
+      else toast(auto.message || '部分新插件需要手动修复', 5200);
+    }
+    renderDebugNotice();
     updateTranslationUI();
     if (S.view === 'settings') renderSettings();
   }
@@ -840,6 +915,20 @@
     };
     $('btnRestore').onclick = function () {
       setGlobalEnabled(false);
+    };
+    $('btnRepairDebug').onclick = function () {
+      if (S.repairToken || !pendingDebug().length) return;
+      var token = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+      S.repairToken = token;
+      S.repairToastToken = '';
+      saveControl({ repairDebugToken: token });
+      renderDebugNotice();
+      toast('已请求修复，正在写入 .debug…', 3000);
+      setTimeout(refreshAgent, 500);
+    };
+    $('btnDismissDebug').onclick = function () {
+      S.debugDismissed = S.debugSig;
+      renderDebugNotice();
     };
     $('pluginToggle').onchange = function () {
       if (!S.key) return;

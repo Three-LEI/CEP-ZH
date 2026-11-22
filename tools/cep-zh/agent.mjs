@@ -3,8 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { spawn } from 'node:child_process';
 
-import { scanExtensions } from './lib/scan.mjs';
+import { scanExtensions, detectInstalledHosts } from './lib/scan.mjs';
 import { buildPortIndex, discoverLivePanels, resolveLiveTarget } from './lib/live.mjs';
 import { loadDictionaries, buildConfigFor, dictionaryRoots } from './lib/dict.mjs';
 import { attach, reinject, evaluateOn } from './lib/inject.mjs';
@@ -20,6 +21,8 @@ const USER_DICT_DIR = path.join(USER_ROOT, 'dict');
 const USER_EXT_DIR = path.join(USER_DICT_DIR, 'extensions');
 const CONTROL_PATH = path.join(USER_ROOT, 'control.json');
 const STATE_PATH = path.join(USER_ROOT, 'state.json');
+const BASELINE_PATH = path.join(USER_ROOT, 'debug-baseline.json');
+const CLI_PATH = path.join(TOOL_DIR, 'cli.mjs');
 
 const { values: args } = parseArgs({
   options: {
@@ -38,6 +41,9 @@ const log = (...a) => console.log(new Date().toLocaleTimeString(), ...a);
 const vlog = (...a) => { if (args.verbose) log(...a); };
 
 let scan = scanExtensions();
+let installedHosts = new Set(detectInstalledHosts());
+let debugBaseline = loadDebugBaseline();
+if (!debugBaseline) debugBaseline = createDebugBaseline();
 let dicts = loadDictionaries();
 let portIndex = buildPortIndex(scan);
 let control = readControl();
@@ -50,6 +56,11 @@ let controlBusy = false;
 let controlTimer = null;
 let translationRunning = false;
 let lastTranslationToken = '';
+let lastRepairToken = '';
+let lastRepair = null;
+let lastAutoDebug = null;
+let autoDebugRepairing = false;
+const autoDebugAttempted = new Set();
 let translation = {
   running: false, token: '', scope: '', bundleId: '',
   total: 0, done: 0, translated: 0, skipped: 0,
@@ -64,6 +75,7 @@ function readControl() {
       enabled: j.enabled !== false,
       disabledPlugins: Array.isArray(j.disabledPlugins) ? j.disabledPlugins.map(String) : [],
       collectToken: j.collectToken ? String(j.collectToken) : '',
+      repairDebugToken: j.repairDebugToken ? String(j.repairDebugToken) : '',
       translationTask: t && t.token ? {
         token: String(t.token),
         scope: t.scope === 'all' ? 'all' : 'plugin',
@@ -71,7 +83,7 @@ function readControl() {
       } : null,
     };
   } catch {
-    return { enabled: true, disabledPlugins: [], collectToken: '', translationTask: null };
+    return { enabled: true, disabledPlugins: [], collectToken: '', repairDebugToken: '', translationTask: null };
   }
 }
 
@@ -106,6 +118,41 @@ function resolve(port, page) {
   return resolveLiveTarget(scan, portIndex, { port, page: page || {} });
 }
 
+function loadDebugBaseline() {
+  try {
+    const doc = JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8').replace(/^\uFEFF/, ''));
+    if (Array.isArray(doc.paths)) return new Set(doc.paths.map((p) => String(p).toLowerCase()));
+  } catch {}
+  return null;
+}
+
+function createDebugBaseline() {
+  const paths = scan.bundles.map((b) => b.basePath.toLowerCase()).sort();
+  try {
+    fs.mkdirSync(USER_ROOT, { recursive: true });
+    fs.writeFileSync(BASELINE_PATH, JSON.stringify({ updatedAt: new Date().toISOString(), paths }, null, 2));
+  } catch (err) {
+    vlog('debug baseline write failed', err.message);
+  }
+  return new Set(paths);
+}
+
+function pendingDebug() {
+  const out = [];
+  for (const bundle of scan.bundles) {
+    if (!bundle || bundle.hasDebugFile) continue;
+    const bundleId = String(bundle.bundleId || '');
+    if (!bundleId || bundleId.startsWith('cep.zh.')) continue;
+    if (debugBaseline && debugBaseline.has(String(bundle.basePath).toLowerCase())) continue;
+    const hosts = (bundle.hosts || []).map((h) => h.name).filter((h) => installedHosts.has(h));
+    if (!hosts.length) continue;
+    let writable = false;
+    try { fs.accessSync(bundle.basePath, fs.constants.W_OK); writable = true; } catch {}
+    out.push({ bundleId, path: bundle.basePath, hosts, writable });
+  }
+  return out;
+}
+
 function writeState(panels) {
   try {
     fs.mkdirSync(USER_ROOT, { recursive: true });
@@ -116,6 +163,9 @@ function writeState(panels) {
       disabledPlugins: control.disabledPlugins,
       lastCollect,
       translation,
+      pendingDebug: pendingDebug(),
+      lastRepair,
+      lastAutoDebug,
       panels: panels || [],
     };
     fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
@@ -270,13 +320,131 @@ async function syncControl() {
         runTranslationTask(control.translationTask).catch((err) => log('[translate] failed', err.message));
       }
     }
+    if (control.repairDebugToken && control.repairDebugToken !== lastRepairToken) {
+      lastRepairToken = control.repairDebugToken;
+      repairPendingDebug(control.repairDebugToken);
+    }
   } finally {
     controlBusy = false;
   }
 }
 
-function watchControl() {
+function repairPendingDebug(token) {  const pending = pendingDebug();
+  const total = pending.length;
+  if (!total) {
+    lastRepair = {
+      token, at: new Date().toISOString(), status: 'done', total: 0, remaining: 0,
+      message: '没有待补写的插件',
+    };
+    writeState(panelState(lastLive));
+    return;
+  }
+
+  const ids = [...new Set(pending.map((p) => p.bundleId))];
+  const hosts = [...new Set(pending.flatMap((p) => p.hosts))];
+  const needElevate = pending.some((p) => !p.writable);
+  const args = [CLI_PATH, 'enable', '--hosts', hosts.join(','), '--only', ids.join(',')];
+  if (needElevate) args.push('--elevate');
+
+  lastRepair = {
+    token, at: new Date().toISOString(), status: 'running', total,
+    remaining: total, elevated: needElevate,
+    message: needElevate ? '写入用户目录，并请求管理员权限处理系统目录' : '正在写入 .debug',
+  };
+  log(`[debug] repair ${ids.length} bundle(s), elevated=${needElevate}`);
+  writeState(panelState(lastLive));
+
+  let child;
   try {
+    child = spawn(process.execPath, args, { cwd: TOOL_DIR, windowsHide: true, stdio: 'ignore' });
+  } catch (err) {
+    lastRepair = {
+      token, at: new Date().toISOString(), status: 'error', total, remaining: total,
+      message: err.message,
+    };
+    writeState(panelState(lastLive));
+    return;
+  }
+
+  child.on('error', (err) => {
+    lastRepair = {
+      token, at: new Date().toISOString(), status: 'error', total, remaining: total,
+      message: err.message,
+    };
+    writeState(panelState(lastLive));
+  });
+
+  child.on('exit', (code) => {
+    try {
+      scan = scanExtensions();
+      installedHosts = new Set(detectInstalledHosts());
+      portIndex = buildPortIndex(scan);
+    } catch (err) {
+      vlog('post-repair rescan failed', err.message);
+    }
+    const remaining = pendingDebug().length;
+    const status = remaining === 0 ? 'done' : (needElevate ? 'elevated' : 'error');
+    lastRepair = {
+      token, at: new Date().toISOString(), status, total, remaining,
+      elevated: needElevate,
+      message: status === 'done'
+        ? '已写入 .debug，请重启 Adobe 应用'
+        : (status === 'elevated'
+          ? '已请求管理员写入系统目录；完成后请重启 Adobe 应用'
+          : `仍有 ${remaining} 个插件未写入，请查看日志`),
+    };
+    writeState(panelState(lastLive));
+    log(`[debug] repair exit=${code} remaining=${remaining} status=${status}`);
+  });
+}
+
+function autoRepairWritable() {
+  if (autoDebugRepairing) return;
+  const pending = pendingDebug().filter((p) => p.writable && !autoDebugAttempted.has(p.path));
+  if (!pending.length) return;
+  pending.forEach((p) => autoDebugAttempted.add(p.path));
+  autoDebugRepairing = true;
+  const ids = [...new Set(pending.map((p) => p.bundleId))];
+  const hosts = [...new Set(pending.flatMap((p) => p.hosts))];
+  log(`[debug] auto-write ${ids.length} writable bundle(s)`);
+  let child;
+  try {
+    child = spawn(process.execPath,
+      [CLI_PATH, 'enable', '--hosts', hosts.join(','), '--only', ids.join(',')],
+      { cwd: TOOL_DIR, windowsHide: true, stdio: 'ignore' });
+  } catch (err) {
+    autoDebugRepairing = false;
+    vlog('auto debug spawn failed', err.message);
+    return;
+  }
+  child.on('error', (err) => {
+    autoDebugRepairing = false;
+    vlog('auto debug failed', err.message);
+  });
+  child.on('exit', () => {
+    autoDebugRepairing = false;
+    try {
+      scan = scanExtensions();
+      installedHosts = new Set(detectInstalledHosts());
+      portIndex = buildPortIndex(scan);
+    } catch (err) {
+      vlog('auto-debug rescan failed', err.message);
+    }
+    const remaining = pendingDebug().length;
+    lastAutoDebug = {
+      at: new Date().toISOString(),
+      count: ids.length,
+      status: remaining === 0 ? 'done' : 'pending',
+      remaining,
+      message: remaining === 0
+        ? '新插件已自动写入 .debug，请重启 Adobe 应用'
+        : '部分新插件的 .debug 写入失败，请在管理面板中修复',
+    };
+    writeState(panelState(lastLive));
+  });
+}
+
+function watchControl() {  try {
     fs.mkdirSync(USER_ROOT, { recursive: true });
     fs.watch(USER_ROOT, (_event, filename) => {
       if (filename && String(filename).toLowerCase() !== 'control.json') return;
@@ -483,6 +651,7 @@ async function tick() {
     await collectAll(live);
   }
 
+  autoRepairWritable();
   writeState(panelState(live));
   return live.length;
 }
@@ -538,6 +707,7 @@ async function main() {
     setInterval(() => {
       try {
         scan = scanExtensions();
+        installedHosts = new Set(detectInstalledHosts());
         portIndex = buildPortIndex(scan);
       } catch (err) {
         vlog('rescan failed', err.message);
