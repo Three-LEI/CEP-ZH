@@ -4,7 +4,7 @@
 #include <functional>
 #include <string>
 
-constexpr wchar_t kCepZhVersion[] = L"0.4.0";
+constexpr wchar_t kCepZhVersion[] = L"0.4.1";
 
 struct UiModel
 {

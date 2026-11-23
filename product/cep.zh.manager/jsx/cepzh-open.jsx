@@ -14,8 +14,8 @@ function CEPZH_OPEN_PATH(path, isFile, helper) {
                 if (request.open("w")) {
                     request.write(String(path) + "\n" + (isFile ? "1" : "0") + "\n");
                     request.close();
-                    var command = 'cmd.exe /c ""' + helperFile.fsName +
-                        '" --open-request "' + request.fsName + '""';
+                    var command = 'cmd.exe /c start "" "' + helperFile.fsName +
+                        '" --open-request "' + request.fsName + '"';
                     try {
                         if (typeof system !== "undefined" && system.callSystem) {
                             system.callSystem(command);

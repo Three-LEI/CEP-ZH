@@ -77,17 +77,10 @@ std::wstring LeafName(const std::wstring& path) {
 void ActivateExplorerWindow(HWND hwnd) {
     if (!hwnd || !IsWindow(hwnd)) return;
     ShowWindow(hwnd, SW_RESTORE);
-
-    const HWND foreground = GetForegroundWindow();
-    const DWORD foregroundThread = foreground
-        ? GetWindowThreadProcessId(foreground, nullptr) : 0;
-    const DWORD currentThread = GetCurrentThreadId();
-    const bool attached = foregroundThread && foregroundThread != currentThread &&
-        AttachThreadInput(currentThread, foregroundThread, TRUE);
+    SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
     SetForegroundWindow(hwnd);
     BringWindowToTop(hwnd);
-    SetFocus(hwnd);
-    if (attached) AttachThreadInput(currentThread, foregroundThread, FALSE);
 }
 
 struct ExplorerSearch {
