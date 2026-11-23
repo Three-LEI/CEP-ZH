@@ -1,37 +1,7 @@
-// CEP-ZH host-side opener. Runs in the Adobe application (ExtendScript),
-// so it does not depend on Node.js being enabled in the CEP panel.
-//
-// File/folder paths are passed through a UTF-8 request file. This keeps the
-// command line ASCII-only and avoids ExtendScript/CMD Unicode path failures.
-function CEPZH_OPEN_PATH(path, isFile, helper) {
-    try {
-        if (helper) {
-            var helperFile = new File(helper);
-            // v0.4.0+ helper supports --open-request and foreground activation.
-            if (helperFile.exists && helperFile.length > 178000) {
-                var request = new File(Folder.temp.fsName + "/cepzh-open-request.txt");
-                request.encoding = "UTF-8";
-                if (request.open("w")) {
-                    request.write(String(path) + "\n" + (isFile ? "1" : "0") + "\n");
-                    request.close();
-                    var command = 'cmd.exe /c start "" "' + helperFile.fsName +
-                        '" --open-request "' + request.fsName + '"';
-                    try {
-                        if (typeof system !== "undefined" && system.callSystem) {
-                            system.callSystem(command);
-                            return "OK";
-                        }
-                    } catch (e) {}
-                    try {
-                        if (app && app.system) {
-                            app.system(command);
-                            return "OK";
-                        }
-                    } catch (e) {}
-                }
-            }
-        }
-    } catch (e) {}
+// CEP-ZH host-side opener. Uses ExtendScript's ShellExecute-backed Folder/File
+// methods only. It never starts cmd.exe or a helper process, so the Adobe host
+// cannot be blocked waiting for an external program.
+function CEPZH_OPEN_PATH(path, isFile) {
     try {
         if (isFile) {
             var file = new File(path);

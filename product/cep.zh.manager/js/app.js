@@ -401,13 +401,7 @@
       .replace(/\n/g, '\\n') + '"';
   }
 
-  function helperPath() {
-    var dir = localDataPath() + '/CEP-ZH/agent/bin';
-    var ascii = dir + '/cepzh-elevate.exe';
-    return pathExists(ascii) ? ascii : dir + '/CEP汉化修复工具.exe';
-  }
-
-  function openViaJsx(action, path, isFile, onError, helper) {
+  function openViaJsx(action, path, isFile, onError) {
     if (!host || typeof host.evalScript !== 'function' || !EXTENSION) {
       onError();
       return;
@@ -415,7 +409,7 @@
     var jsx = EXTENSION + '/jsx/cepzh-open.jsx';
     var fn = action === 'url' ? 'CEPZH_OPEN_URL' : (action === 'run' ? 'CEPZH_RUN_FILE' : 'CEPZH_OPEN_PATH');
     var args = jsxString(path);
-    if (action === 'path') args += ',' + (isFile ? 'true' : 'false') + ',' + jsxString(helper || '');
+    if (action === 'path') args += ',' + (isFile ? 'true' : 'false');
     var expr = '$.evalFile(' + jsxString(jsx) + '); ' + fn + '(' + args + ');';
     try {
       host.evalScript(expr, function (result) {
@@ -431,7 +425,7 @@
     openViaJsx('path', path, isFile, function () {
       copyPath(path);
       toast('宿主未能打开，路径已复制');
-    }, helperPath());
+    });
   }
 
   function openUrlSafe(url, skipGuard) {
