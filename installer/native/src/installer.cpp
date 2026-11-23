@@ -301,6 +301,9 @@ bool ExtractZip(const std::wstring& zipPath, const std::wstring& dest, bool only
 
 std::wstring FindRepoRoot(const std::wstring& extracted)
 {
+    // The pinned runtime archive is intentionally packaged with product/ and
+    // tools/ at the ZIP root, so also accept the extraction directory itself.
+    if (DirectoryExists(JoinPath(extracted, L"product\\cep.zh.manager"))) return extracted;
     std::error_code ec;
     for (fs::recursive_directory_iterator it(fs::path(extracted), ec), end; it != end && !ec; it.increment(ec)) {
         if (ec) break;
