@@ -56,8 +56,6 @@
     exportLog: '尚未操作',
     importOverwrite: false,
     translationRunning: false,
-    updateDownloading: false,
-    updateToken: '',
     lastTranslationSeen: '',
     debugDismissed: '',
     debugSig: '',
@@ -381,7 +379,7 @@
       );
     }
     if (common) {
-      items.push({ group: 'Adobe', label: 'CEP12 引擎代理', path: common + '/Adobe/CEP', kind: 'dir', desc: 'VCRUNTIME140_1.dll 代理所在引擎目录' });
+      items.push({ group: 'Adobe', label: 'CEP 安装目录', path: common + '/Adobe/CEP', kind: 'dir', desc: 'Adobe CEP 运行时目录' });
     }
     return items.filter(function (item) { return item.path; });
   }
@@ -441,40 +439,7 @@
   }
 
   function openInstallerUpdate() {
-    if (S.updateDownloading) return;
-    var token = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
-    S.updateDownloading = true;
-    S.updateToken = token;
-    var button = $('btnUpdate');
-    if (button) { button.disabled = true; button.textContent = '\u8bf7\u6c42\u4e2d\u2026'; }
-    saveControl({ updateTask: { token: token, requestedAt: Date.now() } });
-    toast('\u5df2\u8bf7\u6c42\u66f4\u65b0\uff0cAgent \u6b63\u5728\u4e0b\u8f7d\u5b89\u88c5\u5668\u2026', 3600);
-    setTimeout(function () {
-      if (S.updateToken !== token) return;
-      S.updateDownloading = false;
-      S.updateToken = '';
-      if (button) { button.disabled = false; button.textContent = '\u4e0b\u8f7d\u5e76\u66f4\u65b0'; }
-      toast('Agent \u6ca1\u6709\u54cd\u5e94\u66f4\u65b0\u8bf7\u6c42', 5200);
-    }, 20000);
-  }
-
-  function renderUpdateState() {
-    if (!S.updateToken || !S.agent || !S.agent.update) return;
-    var update = S.agent.update;
-    if (update.token !== S.updateToken) return;
-    var button = $('btnUpdate');
-    if (update.status === 'checking' || update.status === 'downloading') {
-      if (button) {
-        button.disabled = true;
-        button.textContent = update.status === 'checking' ? '\u68c0\u67e5\u66f4\u65b0\u2026' : '\u4e0b\u8f7d\u4e2d\u2026';
-      }
-      return;
-    }
-    S.updateDownloading = false;
-    S.updateToken = '';
-    if (button) { button.disabled = false; button.textContent = '\u4e0b\u8f7d\u5e76\u66f4\u65b0'; }
-    if (update.status === 'error') toast(update.message || '\u66f4\u65b0\u5931\u8d25', 5200);
-    else if (update.status === 'launched') toast(update.message || '\u5b89\u88c5\u5668\u5df2\u542f\u52a8', 5200);
+    openUrlSafe(RELEASES_URL);
   }
   function fallbackCopy(text) {
     try {
@@ -1479,7 +1444,6 @@
     var active = document.activeElement;
     var typing = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
     refreshAgent();
-    renderUpdateState();
     loadControl();
     if (!typing) {
       loadCommon();

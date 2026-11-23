@@ -1,9 +1,6 @@
 // cep-zh agent: discover CEP panels, inject runtime, collect words, honor control.json.
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
-import https from 'node:https';
-import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { spawn } from 'node:child_process';
@@ -72,26 +69,11 @@ let translation = {
   total: 0, done: 0, translated: 0, skipped: 0,
   error: '', startedAt: '', finishedAt: '',
 };
-let updateState = { token: '', status: 'idle', message: '', version: '' };
-let lastUpdateToken = '';
-let updateRunning = false;
-const UPDATE_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAlUHUPkm01Y0ZgG8phLPU
-vKWLlaZr5xJ2cTplJ3yj5RWklYytHVk9nK0tSJItahfh8PFGmdQqZA+9CHep6FNd
-BGtKYi2b/6u4M7NezQAjSQ2tE0NaFYA+spSUBsxZ3QnA9wrXY2ggvtPhRC0Je9+u
-W1aonu256mYdZr8o84pPGKzfdn7jpNQnV8HyU9d8w6sejguJHTEO8ST6kzJtagOw
-JFxo6fK1Ce73pEEarzaX3VxK+zWE8H6kiemt6FauchvoHdRRKDxFf1GcjqMppKc5
-ZMH2+OFNC9qVkA/+4W6e3BWmys+FQ65CbZc1s83QynNU17K8Q8Zh0S1Fd1yFU8WE
-Zy4nXUUesk1AFAQYSOBV9cOGO46JYwcYpwBOMZAMkSwU/lA9XeZ4ACwPPgxkONkR
-AX+q5h1bF6gljawd6PGMOjzZpq0dk6vfzTFLhz3Y3PrCE4c7+emgZIiVZN4oyPjx
-dxutBFYnIdTaLAEbAspyQ+rfyuPScem/vyTZD1A64IFxAgMBAAE=
------END PUBLIC KEY-----`;
 
 function readControl() {
   try {
     const j = JSON.parse(fs.readFileSync(CONTROL_PATH, 'utf8').replace(/^\uFEFF/, ''));
     const t = j.translationTask;
-    const u = j.updateTask;
     return {
       enabled: j.enabled !== false,
       disabledPlugins: Array.isArray(j.disabledPlugins) ? j.disabledPlugins.map(String) : [],
@@ -103,13 +85,9 @@ function readControl() {
         scope: t.scope === 'all' ? 'all' : 'plugin',
         bundleId: String(t.bundleId || ''),
       } : null,
-      updateTask: u && u.token ? {
-        token: String(u.token),
-        requestedAt: Number(u.requestedAt) || 0,
-      } : null,
     };
   } catch {
-    return { enabled: true, disabledPlugins: [], collectToken: '', repairDebugToken: '', repairDebugRequestedAt: 0, translationTask: null, updateTask: null };
+    return { enabled: true, disabledPlugins: [], collectToken: '', repairDebugToken: '', repairDebugRequestedAt: 0, translationTask: null };
   }
 }
 
@@ -206,7 +184,6 @@ function writeState(panels) {
       disabledPlugins: control.disabledPlugins,
       lastCollect,
       translation,
-      update: updateState,
       pendingDebug: pendingDebug(),
       lastRepair,
       lastAutoDebug,
@@ -349,124 +326,6 @@ async function runTranslationTask(task) {
   }
 }
 
-function httpsBuffer(url, redirects = 5) {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: { 'User-Agent': 'CEP-ZH-Agent' } }, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
-        res.resume();
-        let next = res.headers.location;
-        if (!/^https?:\/\//i.test(next)) next = new URL(next, url).toString();
-        resolve(httpsBuffer(next, redirects - 1));
-        return;
-      }
-      if (res.statusCode !== 200) {
-        res.resume();
-        reject(new Error('HTTP ' + res.statusCode));
-        return;
-      }
-      const chunks = [];
-      res.on('data', (c) => chunks.push(c));
-      res.on('end', () => resolve(Buffer.concat(chunks)));
-      res.on('error', reject);
-    });
-    req.on('error', reject);
-    req.setTimeout(30000, () => req.destroy(new Error('请求超时')));
-  });
-}
-
-async function fetchSignedManifest() {
-  const urls = [
-    'https://github.com/Three-LEI/CEP-ZH/releases/latest/download/CEP-ZH-manifest.json',
-    'https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/latest/download/CEP-ZH-manifest.json',
-    'https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/latest/download/CEP-ZH-manifest.json'
-  ];
-  let lastError = null;
-  for (const url of urls) {
-    try {
-      const manifest = await httpsBuffer(url);
-      const signature = await httpsBuffer(url.replace(/\.json$/i, '.sig'));
-      if (!crypto.verify('sha256', manifest, UPDATE_PUBLIC_KEY, signature)) {
-        throw new Error('更新清单签名校验失败');
-      }
-      const data = JSON.parse(manifest.toString('utf8').replace(/^\uFEFF/, ''));
-      if (!data.version || !/^[0-9a-f]{64}$/i.test(String(data.installerSha256 || ''))) {
-        throw new Error('更新清单缺少安装器哈希');
-      }
-      return data;
-    } catch (err) {
-      lastError = err;
-    }
-  }
-  throw lastError || new Error('无法获取更新清单');
-}
-
-async function downloadInstaller(manifest) {
-  const version = String(manifest.version).replace(/^v/i, '');
-  const prefixes = [
-    'https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/download/',
-    'https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/download/',
-    'https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/releases/download/',
-    'https://github.com/Three-LEI/CEP-ZH/releases/download/'
-  ];
-  let lastError = null;
-  for (const prefix of prefixes) {
-    try {
-      const url = prefix + 'v' + version + '/CepZhInstaller.exe';
-      const buffer = await httpsBuffer(url);
-      const hash = crypto.createHash('sha256').update(buffer).digest('hex');
-      if (hash.toLowerCase() !== String(manifest.installerSha256).toLowerCase()) {
-        throw new Error('安装器 SHA-256 不匹配');
-      }
-      const dir = path.join(os.tmpdir(), 'CEP-ZH-update');
-      fs.mkdirSync(dir, { recursive: true });
-      const file = path.join(dir, 'CepZhInstaller-' + version + '.exe');
-      fs.writeFileSync(file, buffer);
-      return file;
-    } catch (err) {
-      lastError = err;
-    }
-  }
-  throw lastError || new Error('安装器下载失败');
-}
-
-async function runUpdateTask(task) {
-  if (!task || !task.token || updateRunning) return;
-  lastUpdateToken = task.token;
-  if (Date.now() - (task.requestedAt || 0) > 120000) {
-    updateState = { token: task.token, status: 'error', message: '更新请求已过期', version: '' };
-    writeState(panelState(lastLive));
-    return;
-  }
-  updateRunning = true;
-  updateState = { token: task.token, status: 'checking', message: '正在获取更新清单', version: '' };
-  writeState(panelState(lastLive));
-  try {
-    const manifest = await fetchSignedManifest();
-    updateState = {
-      token: task.token, status: 'downloading', version: manifest.version,
-      message: '正在下载安装器 v' + manifest.version,
-    };
-    writeState(panelState(lastLive));
-    const file = await downloadInstaller(manifest);
-    const child = spawn(file, [], { detached: true, stdio: 'ignore', windowsHide: false });
-    child.unref();
-    updateState = {
-      token: task.token, status: 'launched', version: manifest.version,
-      message: '安装器已启动，请按提示关闭 Adobe 应用',
-    };
-    lastUpdateToken = task.token;
-    log('[update] installer launched', manifest.version);
-  } catch (err) {
-    updateState = {
-      token: task.token, status: 'error', version: '',
-      message: '更新失败：' + err.message,
-    };
-    log('[update] failed', err.message);
-  } finally {
-    updateRunning = false;
-    writeState(panelState(lastLive));
-  }
-}
 
 async function syncControl() {
   if (controlBusy) return;
@@ -486,9 +345,6 @@ async function syncControl() {
     if (control.repairDebugToken && control.repairDebugToken !== lastRepairToken) {
       lastRepairToken = control.repairDebugToken;
       repairPendingDebug(control.repairDebugToken);
-    }
-    if (control.updateTask && control.updateTask.token !== lastUpdateToken && !updateRunning) {
-      runUpdateTask(control.updateTask).catch((err) => log('[update] failed', err.message));
     }
   } finally {
     controlBusy = false;

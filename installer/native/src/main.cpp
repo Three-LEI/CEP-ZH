@@ -24,7 +24,7 @@ using Microsoft::WRL::ComPtr;
 namespace
 {
 constexpr wchar_t kWindowClass[] = L"CEP.ZH.Installer.Window";
-constexpr wchar_t kWindowTitle[] = L"CEP 汉化管理器 · 安装器 v0.6.1";
+constexpr wchar_t kWindowTitle[] = L"CEP 汉化管理器 · 安装器 v0.7.0";
 constexpr int kWidth = 760;
 constexpr int kHeight = 570;
 constexpr UINT kMsgUpdate = WM_APP + 1;
@@ -535,7 +535,7 @@ void Paint()
     DrawCard(kCard1Top, L"01", L"安装 CEP 汉化文件",
         L"从 GitHub 下载最新 source，安装管理器、Agent 与 Node.js 运行时。", g_model.step1);
     DrawCard(kCard2Top, L"02", L"初始化 CEP 插件 (.debug)",
-        L"CEP12 自动装引擎代理；旧版扫描 .debug，已有跳过，缺失时写入。", g_model.step2);
+        L"扫描所有 CEP 版本；缺失 .debug 时写入，已有则保留。", g_model.step2);
 
     DrawProgress();
     DrawLog();

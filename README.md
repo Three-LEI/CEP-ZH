@@ -10,15 +10,15 @@ Adobe 2020 及以上版本的 CEP 面板通用汉化管理器。
 
 0.2.1 起安装器会同时安装中文提权工具 `CEP汉化修复工具.exe`。旧版安装器不会安装该工具，请使用新版。
 
-0.6.0 起安装器从签名清单获取最新运行时，并对运行时和 Node.js ZIP 做 SHA-256 校验；下载代理只负责传输，无法篡改内容。
+0.7.0 起安装器从签名清单获取最新运行时，并对运行时和 Node.js ZIP 做 SHA-256 校验；下载代理只负责传输，无法篡改内容。
 
 ## 兼容范围
 
 - **支持：Adobe 2020 或更新版本**（PS / AE / AI / PR 等 CEP 面板）
 - **不支持：Adobe 2019 及更早版本**
 - Windows 10 / 11
-- CEP 12：安装 `VCRUNTIME140_1.dll` 引擎代理，后续新插件自动获得调试端口
-- CEP 9–11：使用 `.debug`；已有 `.debug` 的插件跳过
+- CEP 9–12：统一使用官方 `.debug` 调试端口；已有 `.debug` 的插件保留
+- 不再修改 Adobe 安装目录，也不安装 `VCRUNTIME140_1.dll` 代理
 - 管理面板在小尺寸下自动切换为紧凑开关；最小可到 `150 × 200`
 
 ## 功能
@@ -98,7 +98,7 @@ tools/release/public.pem
 1. 关闭所有 Adobe 应用。
 2. 以管理员身份运行安装器。
 3. ① 安装管理器 / Agent / Node 运行时。
-4. ② 初始化 CEP 插件：CEP12 安装引擎代理，旧版写入 `.debug`。
+4. ② 初始化 CEP 插件：为 CEP 9–12 写入 `.debug`，并清理旧版代理。
 5. 重启 Adobe 应用。
 6. 打开：
 
@@ -110,8 +110,7 @@ tools/release/public.pem
 
 新增插件：
 
-- CEP12 由引擎代理自动覆盖，不需要重新安装；
-- CEP 9–11 用户目录会自动补 `.debug`；
+- CEP 9–12 统一由 `.debug` 覆盖；
 - 系统目录会显示修复提示；
 - 设置页可“修复全部 .debug”，补写所有已存在但缺失的插件。
 
@@ -127,7 +126,6 @@ CepZhInstaller.exe --uninstall
 product/cep.zh.manager   管理面板（HTML/CSS/JS）
 tools/cep-zh             Agent、CLI、运行时和字典
 tools/elevate            C++ 管理员写入助手（CEP汉化修复工具.exe）
-tools/bootstrap          CEP12 引擎代理
 installer/native         C++ 安装器
 ```
 
