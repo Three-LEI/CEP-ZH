@@ -56,6 +56,7 @@
     exportLog: '尚未操作',
     importOverwrite: false,
     translationRunning: false,
+    updateDownloading: false,
     lastTranslationSeen: '',
     debugDismissed: '',
     debugSig: '',
@@ -353,8 +354,7 @@
       { group: 'Agent', label: '调试分配 / 备份索引', path: tools + '/state.json', kind: 'file', desc: '.debug 端口分配和 .cep-zh.bak 备份记录' },
       { group: 'Agent', label: '抓词 / 扫描缓存', path: tools + '/catalog', kind: 'dir', desc: 'catalog 命令输出的面板字符串缓存' },
       { group: 'Agent', label: '修复工具', path: agent + '/bin/CEP汉化修复工具.exe', kind: 'file', desc: '管理员权限写入 .debug 的原生工具' },
-      { group: '管理面板', label: '宿主打开脚本', path: EXTENSION + '/jsx/cepzh-open.jsx', kind: 'file', desc: '通过 ExtendScript 打开文件、文件夹和安装器' },
-      { group: '管理面板', label: '内置安装器', path: EXTENSION + '/installer/CepZhInstaller.exe', kind: 'file', desc: '面板更新入口；卸载时随扩展目录删除' }
+      { group: '管理面板', label: '宿主打开脚本', path: EXTENSION + '/jsx/cepzh-open.jsx', kind: 'file', desc: '通过 ExtendScript 打开文件和文件夹' }
     ];
     if (local) {
       items.push(
@@ -403,15 +403,13 @@
   }
 
   function openViaJsx(action, path, isFile, onError) {
-    if (!host || typeof host.evalScript !== 'function' || !EXTENSION) {
+    if (action !== 'path' || !host || typeof host.evalScript !== 'function' || !EXTENSION) {
       onError();
       return;
     }
     var jsx = EXTENSION + '/jsx/cepzh-open.jsx';
-    var fn = action === 'url' ? 'CEPZH_OPEN_URL' : (action === 'run' ? 'CEPZH_RUN_FILE' : 'CEPZH_OPEN_PATH');
-    var args = jsxString(path);
-    if (action === 'path') args += ',' + (isFile ? 'true' : 'false');
-    var expr = '$.evalFile(' + jsxString(jsx) + '); ' + fn + '(' + args + ');';
+    var expr = '$.evalFile(' + jsxString(jsx) + '); CEPZH_OPEN_PATH(' +
+      jsxString(path) + ',' + (isFile ? 'true' : 'false') + ');';
     try {
       host.evalScript(expr, function (result) {
         if (String(result) !== 'OK') onError();
@@ -441,15 +439,142 @@
     toast('无法打开浏览器，链接已复制');
   }
 
-  function openInstallerUpdate() {
-    var installer = EXTENSION + '/installer/CepZhInstaller.exe';
-    if (pathExists(installer)) {
-      openViaJsx('run', installer, false, function () {
-        openUrlSafe(RELEASES_URL, true);
+  function nodeModule(name) {
+    try {
+      var req = (typeof require === 'function') ? require : (window.require || null);
+      return req ? req(name) : null;
+    } catch (e) { return null; }
+  }
+
+  function httpsGetBuffer(url, redirects, callback) {
+    var https = nodeModule('https');
+    if (!https) { callback(new Error('CEP Node.js 不可用')); return; }
+    var req = https.get(url, {
+      headers: { 'User-Agent': 'CEP-ZH-Update', 'Accept': 'application/octet-stream' }
+    }, function (res) {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
+        res.resume();
+        var next = res.headers.location;
+        if (!/^https?:\/\//i.test(next)) {
+          var urlmod = nodeModule('url');
+          if (urlmod && urlmod.resolve) next = urlmod.resolve(url, next);
+        }
+        httpsGetBuffer(next, redirects - 1, callback);
+        return;
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        callback(new Error('HTTP ' + res.statusCode));
+        return;
+      }
+      var chunks = [];
+      res.on('data', function (chunk) { chunks.push(chunk); });
+      res.on('end', function () { callback(null, Buffer.concat(chunks)); });
+      res.on('error', callback);
+    });
+    req.on('error', callback);
+    req.setTimeout(30000, function () { req.destroy(new Error('请求超时')); });
+  }
+
+  function fetchUpdateManifest(callback) {
+    var urls = [
+      'https://github.com/Three-LEI/CEP-ZH/releases/latest/download/CEP-ZH-manifest.json',
+      'https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/latest/download/CEP-ZH-manifest.json',
+      'https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/latest/download/CEP-ZH-manifest.json'
+    ];
+    var index = 0;
+    function next(lastError) {
+      if (index >= urls.length) {
+        callback(lastError || new Error('无法获取更新清单'));
+        return;
+      }
+      httpsGetBuffer(urls[index++], 5, function (err, buffer) {
+        if (err) { next(err); return; }
+        var data;
+        try {
+          data = JSON.parse(buffer.toString('utf8').replace(/^\uFEFF/, ''));
+        } catch (e) { next(new Error('更新清单不是有效 JSON')); return; }
+        if (!data || !data.version || !/^[0-9a-f]{64}$/i.test(String(data.installerSha256 || ''))) {
+          next(new Error('更新清单缺少安装器哈希'));
+          return;
+        }
+        callback(null, data);
       });
+    }
+    next();
+  }
+
+  function downloadLatestInstaller(manifest, callback) {
+    var fs = nodeModule('fs');
+    var os = nodeModule('os');
+    var path = nodeModule('path');
+    var crypto = nodeModule('crypto');
+    var cp = nodeModule('child_process');
+    if (!fs || !os || !path || !crypto || !cp) {
+      callback(new Error('CEP Node.js 模块不可用'));
       return;
     }
-    openUrlSafe(RELEASES_URL, true);
+    var version = String(manifest.version || '').replace(/^v/i, '');
+    var prefixes = [
+      'https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/download/',
+      'https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/download/',
+      'https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/releases/download/',
+      'https://github.com/Three-LEI/CEP-ZH/releases/download/'
+    ];
+    var urls = prefixes.map(function (prefix) {
+      return prefix + 'v' + version + '/CepZhInstaller.exe';
+    });
+    var index = 0;
+    function next(lastError) {
+      if (index >= urls.length) {
+        callback(lastError || new Error('安装器下载失败'));
+        return;
+      }
+      httpsGetBuffer(urls[index++], 5, function (err, buffer) {
+        if (err) { next(err); return; }
+        var actual = crypto.createHash('sha256').update(buffer).digest('hex');
+        if (actual.toLowerCase() !== String(manifest.installerSha256).toLowerCase()) {
+          next(new Error('安装器 SHA-256 不匹配'));
+          return;
+        }
+        try {
+          var dir = path.join(os.tmpdir(), 'CEP-ZH-update');
+          fs.mkdirSync(dir, { recursive: true });
+          var file = path.join(dir, 'CepZhInstaller-' + version + '.exe');
+          fs.writeFileSync(file, buffer);
+          var child = cp.spawn(file, [], { detached: true, stdio: 'ignore', windowsHide: false });
+          child.unref();
+          callback(null, file);
+        } catch (e) { callback(e); }
+      });
+    }
+    next();
+  }
+
+  function openInstallerUpdate() {
+    if (S.updateDownloading) return;
+    S.updateDownloading = true;
+    var button = $('btnUpdate');
+    var oldText = button ? button.textContent : '';
+    if (button) { button.disabled = true; button.textContent = '下载中…'; }
+    toast('正在获取最新安装器…', 2600);
+    fetchUpdateManifest(function (manifestError, manifest) {
+      if (manifestError) {
+        S.updateDownloading = false;
+        if (button) { button.disabled = false; button.textContent = oldText || '下载并更新'; }
+        toast('更新失败：' + manifestError.message, 5200);
+        return;
+      }
+      downloadLatestInstaller(manifest, function (downloadError, file) {
+        S.updateDownloading = false;
+        if (button) { button.disabled = false; button.textContent = oldText || '下载并更新'; }
+        if (downloadError) {
+          toast('更新失败：' + downloadError.message, 5200);
+          return;
+        }
+        toast('安装器已启动；如提示关闭 Adobe，请关闭后重新运行安装器', 5200);
+      });
+    });
   }
 
   function fallbackCopy(text) {
@@ -1174,18 +1299,36 @@
     return false;
   }
 
+  function installedVersion() {
+    try {
+      var data = readJson(localDataPath() + '/CEP-ZH/version.json', {});
+      return String(data.version || '').replace(/^v/i, '').trim();
+    } catch (e) { return ''; }
+  }
+
   function showUpdateBanner(tag) {
     var version = String(tag || '').replace(/^v/i, '');
-    if (!version || !isNewerVersion(version, APP_VERSION)) return;
+    var local = installedVersion();
+    var panelNeeds = version && isNewerVersion(version, APP_VERSION);
+    var localNeeds = local && (
+      isNewerVersion(APP_VERSION, local) || (version && isNewerVersion(version, local))
+    );
+    if (!panelNeeds && !localNeeds) return;
+    var shown = panelNeeds ? version : APP_VERSION;
+    var dismissKey = shown + '|' + (local || '');
     try {
-      if (localStorage.getItem(UPDATE_DISMISS_KEY) === version) return;
+      if (localStorage.getItem(UPDATE_DISMISS_KEY) === dismissKey) return;
     } catch (e) {}
-    $('updateVersion').textContent = 'v' + version;
+    $('updateVersion').textContent = localNeeds && !panelNeeds
+      ? ('v' + local + ' → v' + APP_VERSION)
+      : ('v' + shown);
     $('updateNotice').classList.remove('hidden');
-    $('updateNotice').setAttribute('data-tag', version);
+    $('updateNotice').setAttribute('data-tag', dismissKey);
   }
 
   function checkForUpdates() {
+    var local = installedVersion();
+    if (local && isNewerVersion(APP_VERSION, local)) showUpdateBanner(APP_VERSION);
     try {
       var checked = Number(localStorage.getItem(UPDATE_CHECK_KEY) || 0);
       if (Date.now() - checked < 6 * 3600 * 1000) return;
