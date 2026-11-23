@@ -50,6 +50,47 @@ powershell -ExecutionPolicy Bypass -File installer\native\scripts\build.ps1
 installer\native\dist\CepZhInstaller.exe
 ```
 
+## 版本与清单签名
+
+版本唯一来源：
+
+```text
+VERSION
+```
+
+构建前执行：
+
+```powershell
+node scripts/stamp-version.mjs
+```
+
+它会同步面板、CEP manifest、安装器版本和资源文件。检查是否一致：
+
+```powershell
+node scripts/stamp-version.mjs --check
+```
+
+Release 清单：
+
+```text
+CEP-ZH-manifest.json
+CEP-ZH-manifest.sig
+```
+
+使用 RSA-3072 私钥签名：
+
+```text
+tools/release/private.pem
+```
+
+公钥：
+
+```text
+tools/release/public.pem
+```
+
+私钥不进入 Git，必须自行备份；丢失后无法签发可被现有客户端接受的更新清单。
+
 ## 使用
 
 安装器是独立单文件，可放在任意位置；它不会创建桌面快捷方式，也不会把自身复制到本机。

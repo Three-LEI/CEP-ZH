@@ -29,7 +29,6 @@
   var LATEST_RELEASE_API = 'https://api.github.com/repos/Three-LEI/CEP-ZH/releases/latest';
   var UPDATE_DISMISS_KEY = 'cepzh.update.dismissed';
   var UPDATE_CHECK_KEY = 'cepzh.update.checkedAt';
-  var MANIFEST_PUBLIC_KEY_DER = 'MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAlUHUPkm01Y0ZgG8phLPUvKWLlaZr5xJ2cTplJ3yj5RWklYytHVk9nK0tSJItahfh8PFGmdQqZA+9CHep6FNdBGtKYi2b/6u4M7NezQAjSQ2tE0NaFYA+spSUBsxZ3QnA9wrXY2ggvtPhRC0Je9+uW1aonu256mYdZr8o84pPGKzfdn7jpNQnV8HyU9d8w6sejguJHTEO8ST6kzJtagOwJFxo6fK1Ce73pEEarzaX3VxK+zWE8H6kiemt6FauchvoHdRRKDxFf1GcjqMppKc5ZMH2+OFNC9qVkA/+4W6e3BWmys+FQ65CbZc1s83QynNU17K8Q8Zh0S1Fd1yFU8WEZy4nXUUesk1AFAQYSOBV9cOGO46JYwcYpwBOMZAMkSwU/lA9XeZ4ACwPPgxkONkRAX+q5h1bF6gljawd6PGMOjzZpq0dk6vfzTFLhz3Y3PrCE4c7+emgZIiVZN4oyPjxdxutBFYnIdTaLAEbAspyQ+rfyuPScem/vyTZD1A64IFxAgMBAAE=';
   var EXTENSION = '';
   try { EXTENSION = nativePath(host.getSystemPath('extension')); } catch (e) {}
   var BUNDLED = EXTENSION + '/dict';
@@ -58,6 +57,7 @@
     importOverwrite: false,
     translationRunning: false,
     updateDownloading: false,
+    updateToken: '',
     lastTranslationSeen: '',
     debugDismissed: '',
     debugSig: '',
@@ -440,161 +440,42 @@
     toast('无法打开浏览器，链接已复制');
   }
 
-  function nodeModule(name) {
-    try {
-      var req = (typeof require === 'function') ? require : (window.require || null);
-      return req ? req(name) : null;
-    } catch (e) { return null; }
-  }
-
-  function httpsGetBuffer(url, redirects, callback) {
-    var https = nodeModule('https');
-    if (!https) { callback(new Error('CEP Node.js 不可用')); return; }
-    var req = https.get(url, {
-      headers: { 'User-Agent': 'CEP-ZH-Update', 'Accept': 'application/octet-stream' }
-    }, function (res) {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
-        res.resume();
-        var next = res.headers.location;
-        if (!/^https?:\/\//i.test(next)) {
-          var urlmod = nodeModule('url');
-          if (urlmod && urlmod.resolve) next = urlmod.resolve(url, next);
-        }
-        httpsGetBuffer(next, redirects - 1, callback);
-        return;
-      }
-      if (res.statusCode !== 200) {
-        res.resume();
-        callback(new Error('HTTP ' + res.statusCode));
-        return;
-      }
-      var chunks = [];
-      res.on('data', function (chunk) { chunks.push(chunk); });
-      res.on('end', function () { callback(null, Buffer.concat(chunks)); });
-      res.on('error', callback);
-    });
-    req.on('error', callback);
-    req.setTimeout(30000, function () { req.destroy(new Error('请求超时')); });
-  }
-
-  function fetchUpdateManifest(callback) {
-    var urls = [
-      'https://github.com/Three-LEI/CEP-ZH/releases/latest/download/CEP-ZH-manifest.json',
-      'https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/latest/download/CEP-ZH-manifest.json',
-      'https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/latest/download/CEP-ZH-manifest.json'
-    ];
-    var index = 0;
-    function next(lastError) {
-      if (index >= urls.length) {
-        callback(lastError || new Error('无法获取更新清单'));
-        return;
-      }
-      var manifestUrl = urls[index++];
-      httpsGetBuffer(manifestUrl, 5, function (err, buffer) {
-        if (err) { next(err); return; }
-        var signatureUrl = manifestUrl.replace(/\.json$/i, '.sig');
-        httpsGetBuffer(signatureUrl, 5, function (sigErr, signature) {
-          if (sigErr) { next(sigErr); return; }
-          var crypto = nodeModule('crypto');
-          if (!crypto) { next(new Error('CEP Node.js crypto 不可用')); return; }
-          var valid = false;
-          try {
-            var key = crypto.createPublicKey({
-              key: Buffer.from(MANIFEST_PUBLIC_KEY_DER, 'base64'),
-              format: 'der',
-              type: 'spki'
-            });
-            valid = crypto.verify('sha256', buffer, key, signature);
-          } catch (e) { next(e); return; }
-          if (!valid) { next(new Error('更新清单签名校验失败')); return; }
-          var data;
-          try {
-            data = JSON.parse(buffer.toString('utf8').replace(/^\uFEFF/, ''));
-          } catch (e) { next(new Error('更新清单不是有效 JSON')); return; }
-          if (!data || !data.version || !/^[0-9a-f]{64}$/i.test(String(data.installerSha256 || ''))) {
-            next(new Error('更新清单缺少安装器哈希'));
-            return;
-          }
-          callback(null, data);
-        });
-      });
-    }
-    next();
-  }
-
-  function downloadLatestInstaller(manifest, callback) {
-    var fs = nodeModule('fs');
-    var os = nodeModule('os');
-    var path = nodeModule('path');
-    var crypto = nodeModule('crypto');
-    var cp = nodeModule('child_process');
-    if (!fs || !os || !path || !crypto || !cp) {
-      callback(new Error('CEP Node.js 模块不可用'));
-      return;
-    }
-    var version = String(manifest.version || '').replace(/^v/i, '');
-    var prefixes = [
-      'https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/download/',
-      'https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/download/',
-      'https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/releases/download/',
-      'https://github.com/Three-LEI/CEP-ZH/releases/download/'
-    ];
-    var urls = prefixes.map(function (prefix) {
-      return prefix + 'v' + version + '/CepZhInstaller.exe';
-    });
-    var index = 0;
-    function next(lastError) {
-      if (index >= urls.length) {
-        callback(lastError || new Error('安装器下载失败'));
-        return;
-      }
-      httpsGetBuffer(urls[index++], 5, function (err, buffer) {
-        if (err) { next(err); return; }
-        var actual = crypto.createHash('sha256').update(buffer).digest('hex');
-        if (actual.toLowerCase() !== String(manifest.installerSha256).toLowerCase()) {
-          next(new Error('安装器 SHA-256 不匹配'));
-          return;
-        }
-        try {
-          var dir = path.join(os.tmpdir(), 'CEP-ZH-update');
-          fs.mkdirSync(dir, { recursive: true });
-          var file = path.join(dir, 'CepZhInstaller-' + version + '.exe');
-          fs.writeFileSync(file, buffer);
-          var child = cp.spawn(file, [], { detached: true, stdio: 'ignore', windowsHide: false });
-          child.unref();
-          callback(null, file);
-        } catch (e) { callback(e); }
-      });
-    }
-    next();
-  }
-
   function openInstallerUpdate() {
     if (S.updateDownloading) return;
+    var token = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
     S.updateDownloading = true;
+    S.updateToken = token;
     var button = $('btnUpdate');
-    var oldText = button ? button.textContent : '';
-    if (button) { button.disabled = true; button.textContent = '下载中…'; }
-    toast('正在获取最新安装器…', 2600);
-    fetchUpdateManifest(function (manifestError, manifest) {
-      if (manifestError) {
-        S.updateDownloading = false;
-        if (button) { button.disabled = false; button.textContent = oldText || '下载并更新'; }
-        toast('更新失败：' + manifestError.message, 5200);
-        return;
-      }
-      downloadLatestInstaller(manifest, function (downloadError, file) {
-        S.updateDownloading = false;
-        if (button) { button.disabled = false; button.textContent = oldText || '下载并更新'; }
-        if (downloadError) {
-          toast('更新失败：' + downloadError.message, 5200);
-          return;
-        }
-        toast('安装器已启动；如提示关闭 Adobe，请关闭后重新运行安装器', 5200);
-      });
-    });
+    if (button) { button.disabled = true; button.textContent = '\u8bf7\u6c42\u4e2d\u2026'; }
+    saveControl({ updateTask: { token: token, requestedAt: Date.now() } });
+    toast('\u5df2\u8bf7\u6c42\u66f4\u65b0\uff0cAgent \u6b63\u5728\u4e0b\u8f7d\u5b89\u88c5\u5668\u2026', 3600);
+    setTimeout(function () {
+      if (S.updateToken !== token) return;
+      S.updateDownloading = false;
+      S.updateToken = '';
+      if (button) { button.disabled = false; button.textContent = '\u4e0b\u8f7d\u5e76\u66f4\u65b0'; }
+      toast('Agent \u6ca1\u6709\u54cd\u5e94\u66f4\u65b0\u8bf7\u6c42', 5200);
+    }, 20000);
   }
 
+  function renderUpdateState() {
+    if (!S.updateToken || !S.agent || !S.agent.update) return;
+    var update = S.agent.update;
+    if (update.token !== S.updateToken) return;
+    var button = $('btnUpdate');
+    if (update.status === 'checking' || update.status === 'downloading') {
+      if (button) {
+        button.disabled = true;
+        button.textContent = update.status === 'checking' ? '\u68c0\u67e5\u66f4\u65b0\u2026' : '\u4e0b\u8f7d\u4e2d\u2026';
+      }
+      return;
+    }
+    S.updateDownloading = false;
+    S.updateToken = '';
+    if (button) { button.disabled = false; button.textContent = '\u4e0b\u8f7d\u5e76\u66f4\u65b0'; }
+    if (update.status === 'error') toast(update.message || '\u66f4\u65b0\u5931\u8d25', 5200);
+    else if (update.status === 'launched') toast(update.message || '\u5b89\u88c5\u5668\u5df2\u542f\u52a8', 5200);
+  }
   function fallbackCopy(text) {
     try {
       var input = document.createElement('textarea');
@@ -1598,6 +1479,7 @@
     var active = document.activeElement;
     var typing = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
     refreshAgent();
+    renderUpdateState();
     loadControl();
     if (!typing) {
       loadCommon();
