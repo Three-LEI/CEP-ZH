@@ -49,16 +49,16 @@ const wchar_t* kNodeLabels[] = { L"npmmirror", L"清华镜像", L"阿里云镜�
 constexpr wchar_t kNodeSha256[] = L"55b639295920b219bb2acbcfa00f90393a2789095b7323f79475c9f34795f217";
 constexpr wchar_t kHosts[] = L"AEFT,PHXS,PPRO,ILST,IDSN,FLPR,AUDT,DRWV";
 const wchar_t* kRepoUrls[] = {
-    L"https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.4/CEP-ZH-runtime-v0.2.4.zip",
-    L"https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.4/CEP-ZH-runtime-v0.2.4.zip",
-    L"https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.4/CEP-ZH-runtime-v0.2.4.zip",
-    L"https://ghproxy.imciel.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.4/CEP-ZH-runtime-v0.2.4.zip",
-    L"https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.4/CEP-ZH-runtime-v0.2.4.zip",
+    L"https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.5/CEP-ZH-runtime-v0.2.5.zip",
+    L"https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.5/CEP-ZH-runtime-v0.2.5.zip",
+    L"https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.5/CEP-ZH-runtime-v0.2.5.zip",
+    L"https://ghproxy.imciel.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.5/CEP-ZH-runtime-v0.2.5.zip",
+    L"https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.5/CEP-ZH-runtime-v0.2.5.zip",
 };
 const wchar_t* kRepoLabels[] = {
     L"ghfast.top", L"gh-proxy.com", L"ghproxy.net", L"ghproxy.imciel.com", L"GitHub 直连",
 };
-constexpr wchar_t kSourceSha256[] = L"9c459fc88f7254ddc3b3f6f92a9de6c2722aac6f3f1cf69bfca5a7a678de7c86";
+constexpr wchar_t kSourceSha256[] = L"4bce49bc4f8e1c87b43039a13fd8da54d0b9ad5acf2c41746d6e3b76fdb33199";
 
 bool ParseHttpUrl(const std::wstring& url, std::wstring& host, std::wstring& path, INTERNET_PORT& port, bool& secure)
 {
@@ -255,6 +255,10 @@ bool ShouldExtract(const std::string& name)
 {
     std::string normalized = name;
     std::replace(normalized.begin(), normalized.end(), '\\', '/');
+    // Pinned runtime archives are flat: product/... starts at the ZIP root.
+    // Existing GitHub archives are nested: CEP-ZH-main/product/...
+    // Normalize both forms to a leading slash before matching.
+    if (normalized.empty() || normalized.front() != '/') normalized.insert(normalized.begin(), '/');
     return normalized.find("/product/cep.zh.manager/") != std::string::npos ||
            normalized.find("/tools/cep-zh/") != std::string::npos ||
            normalized.find("/tools/elevate/dist/") != std::string::npos ||
