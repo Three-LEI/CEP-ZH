@@ -53,9 +53,14 @@ function Copy-Selected([string]$source, [string]$target, [string[]]$exclude) {
     }
 }
 
-# Public archive intentionally excludes MiSans WOFF2; the installer preserves
-# locally installed fonts across upgrades.
-Copy-Selected (Join-Path $root 'product\cep.zh.manager') (Join-Path $stage 'product\cep.zh.manager') @('fonts', '.debug', 'state.json')
+# MiSans is embedded in the release runtime (license permits embedding), while
+# the public Git tree keeps only the license and extraction instructions.
+$fonts = Join-Path $root 'product\cep.zh.manager\fonts'
+if (-not (Test-Path (Join-Path $fonts 'MiSans-Regular.woff2')) -or
+    -not (Test-Path (Join-Path $fonts 'MiSans-Medium.woff2'))) {
+    throw 'MiSans WOFF2 files are missing. Run tools\fonts\extract_misans.py or copy them into product\cep.zh.manager\fonts.'
+}
+Copy-Selected (Join-Path $root 'product\cep.zh.manager') (Join-Path $stage 'product\cep.zh.manager') @('.debug', 'state.json')
 Copy-Selected (Join-Path $root 'tools\cep-zh') (Join-Path $stage 'tools\cep-zh') @('state.json')
 Copy-Selected (Join-Path $root 'tools\elevate') (Join-Path $stage 'tools\elevate') @('build')
 Copy-Item (Join-Path $root 'LICENSE') (Join-Path $stage 'LICENSE') -Force

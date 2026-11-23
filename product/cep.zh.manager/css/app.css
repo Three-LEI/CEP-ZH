@@ -18,7 +18,7 @@
 /* CEP-ZH editor — point / line / plane. */
 :root {
   --sans: "MiSans", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-  --mono: "MiSans", "Cascadia Mono", "Consolas", monospace;
+  --mono: "MiSans", "Cascadia Mono", "Consolas", "Microsoft YaHei UI", "Microsoft YaHei", monospace;
   --edge: 0px;
 }
 
@@ -834,17 +834,25 @@ tbody td { padding: 4px 9px; vertical-align: middle; }
 .statusbar {
   position: relative;
   z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: 26px;
-  padding: 0 18px;
+  height: 24px;
+  padding: 0;
   border-top: 1px solid var(--line-2);
   background: var(--bg);
   color: var(--faint);
-  font: 0.708rem/1 var(--mono);
   white-space: nowrap;
   overflow: hidden;
+}
+.statusbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 125%;
+  height: 100%;
+  padding: 0 18px;
+  box-sizing: border-box;
+  font: 0.667rem/1.1 var(--mono);
+  transform: scale(0.8);
+  transform-origin: left center;
 }
 .statusbar span { overflow: hidden; text-overflow: ellipsis; }
 #agentStatus { color: var(--muted); flex: 0 0 auto; letter-spacing: 0.3px; }
