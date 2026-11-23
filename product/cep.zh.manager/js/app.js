@@ -29,6 +29,7 @@
   var LATEST_RELEASE_API = 'https://api.github.com/repos/Three-LEI/CEP-ZH/releases/latest';
   var UPDATE_DISMISS_KEY = 'cepzh.update.dismissed';
   var UPDATE_CHECK_KEY = 'cepzh.update.checkedAt';
+  var MANIFEST_PUBLIC_KEY_DER = 'MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAlUHUPkm01Y0ZgG8phLPUvKWLlaZr5xJ2cTplJ3yj5RWklYytHVk9nK0tSJItahfh8PFGmdQqZA+9CHep6FNdBGtKYi2b/6u4M7NezQAjSQ2tE0NaFYA+spSUBsxZ3QnA9wrXY2ggvtPhRC0Je9+uW1aonu256mYdZr8o84pPGKzfdn7jpNQnV8HyU9d8w6sejguJHTEO8ST6kzJtagOwJFxo6fK1Ce73pEEarzaX3VxK+zWE8H6kiemt6FauchvoHdRRKDxFf1GcjqMppKc5ZMH2+OFNC9qVkA/+4W6e3BWmys+FQ65CbZc1s83QynNU17K8Q8Zh0S1Fd1yFU8WEZy4nXUUesk1AFAQYSOBV9cOGO46JYwcYpwBOMZAMkSwU/lA9XeZ4ACwPPgxkONkRAX+q5h1bF6gljawd6PGMOjzZpq0dk6vfzTFLhz3Y3PrCE4c7+emgZIiVZN4oyPjxdxutBFYnIdTaLAEbAspyQ+rfyuPScem/vyTZD1A64IFxAgMBAAE=';
   var EXTENSION = '';
   try { EXTENSION = nativePath(host.getSystemPath('extension')); } catch (e) {}
   var BUNDLED = EXTENSION + '/dict';
@@ -488,17 +489,34 @@
         callback(lastError || new Error('无法获取更新清单'));
         return;
       }
-      httpsGetBuffer(urls[index++], 5, function (err, buffer) {
+      var manifestUrl = urls[index++];
+      httpsGetBuffer(manifestUrl, 5, function (err, buffer) {
         if (err) { next(err); return; }
-        var data;
-        try {
-          data = JSON.parse(buffer.toString('utf8').replace(/^\uFEFF/, ''));
-        } catch (e) { next(new Error('更新清单不是有效 JSON')); return; }
-        if (!data || !data.version || !/^[0-9a-f]{64}$/i.test(String(data.installerSha256 || ''))) {
-          next(new Error('更新清单缺少安装器哈希'));
-          return;
-        }
-        callback(null, data);
+        var signatureUrl = manifestUrl.replace(/\.json$/i, '.sig');
+        httpsGetBuffer(signatureUrl, 5, function (sigErr, signature) {
+          if (sigErr) { next(sigErr); return; }
+          var crypto = nodeModule('crypto');
+          if (!crypto) { next(new Error('CEP Node.js crypto 不可用')); return; }
+          var valid = false;
+          try {
+            var key = crypto.createPublicKey({
+              key: Buffer.from(MANIFEST_PUBLIC_KEY_DER, 'base64'),
+              format: 'der',
+              type: 'spki'
+            });
+            valid = crypto.verify('sha256', buffer, key, signature);
+          } catch (e) { next(e); return; }
+          if (!valid) { next(new Error('更新清单签名校验失败')); return; }
+          var data;
+          try {
+            data = JSON.parse(buffer.toString('utf8').replace(/^\uFEFF/, ''));
+          } catch (e) { next(new Error('更新清单不是有效 JSON')); return; }
+          if (!data || !data.version || !/^[0-9a-f]{64}$/i.test(String(data.installerSha256 || ''))) {
+            next(new Error('更新清单缺少安装器哈希'));
+            return;
+          }
+          callback(null, data);
+        });
       });
     }
     next();

@@ -5,6 +5,7 @@
 #include "miniz.h"
 
 #include <windows.h>
+#include <wincrypt.h>
 #include <winver.h>
 #include <tlhelp32.h>
 #include <winhttp.h>
@@ -49,16 +50,18 @@ const wchar_t* kNodeLabels[] = { L"npmmirror", L"清华镜像", L"阿里云镜�
 constexpr wchar_t kNodeSha256[] = L"55b639295920b219bb2acbcfa00f90393a2789095b7323f79475c9f34795f217";
 constexpr wchar_t kHosts[] = L"AEFT,PHXS,PPRO,ILST,IDSN,FLPR,AUDT,DRWV";
 const wchar_t* kRepoUrls[] = {
-    L"https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.5.1/CEP-ZH-runtime-v0.5.1.zip",
-    L"https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.5.1/CEP-ZH-runtime-v0.5.1.zip",
-    L"https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.5.1/CEP-ZH-runtime-v0.5.1.zip",
-    L"https://ghproxy.imciel.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.5.1/CEP-ZH-runtime-v0.5.1.zip",
-    L"https://github.com/Three-LEI/CEP-ZH/releases/download/v0.5.1/CEP-ZH-runtime-v0.5.1.zip",
+    L"https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.6.0/CEP-ZH-runtime-v0.6.0.zip",
+    L"https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.6.0/CEP-ZH-runtime-v0.6.0.zip",
+    L"https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.6.0/CEP-ZH-runtime-v0.6.0.zip",
+    L"https://ghproxy.imciel.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.6.0/CEP-ZH-runtime-v0.6.0.zip",
+    L"https://github.com/Three-LEI/CEP-ZH/releases/download/v0.6.0/CEP-ZH-runtime-v0.6.0.zip",
 };
 const wchar_t* kRepoLabels[] = {
     L"ghfast.top", L"gh-proxy.com", L"ghproxy.net", L"ghproxy.imciel.com", L"GitHub 直连",
 };
 constexpr wchar_t kSourceSha256[] = L"2f246e224f79c0eda90190c83d6a06eb1d80c3a5ea64f6d006b82b918cb060eb";
+constexpr wchar_t kManifestPublicKey[] =
+    L"MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAlUHUPkm01Y0ZgG8phLPUvKWLlaZr5xJ2cTplJ3yj5RWklYytHVk9nK0tSJItahfh8PFGmdQqZA+9CHep6FNdBGtKYi2b/6u4M7NezQAjSQ2tE0NaFYA+spSUBsxZ3QnA9wrXY2ggvtPhRC0Je9+uW1aonu256mYdZr8o84pPGKzfdn7jpNQnV8HyU9d8w6sejguJHTEO8ST6kzJtagOwJFxo6fK1Ce73pEEarzaX3VxK+zWE8H6kiemt6FauchvoHdRRKDxFf1GcjqMppKc5ZMH2+OFNC9qVkA/+4W6e3BWmys+FQ65CbZc1s83QynNU17K8Q8Zh0S1Fd1yFU8WEZy4nXUUesk1AFAQYSOBV9cOGO46JYwcYpwBOMZAMkSwU/lA9XeZ4ACwPPgxkONkRAX+q5h1bF6gljawd6PGMOjzZpq0dk6vfzTFLhz3Y3PrCE4c7+emgZIiVZN4oyPjxdxutBFYnIdTaLAEbAspyQ+rfyuPScem/vyTZD1A64IFxAgMBAAE=";
 
 bool ParseHttpUrl(const std::wstring& url, std::wstring& host, std::wstring& path, INTERNET_PORT& port, bool& secure)
 {
@@ -284,12 +287,74 @@ struct ReleaseInfo
     std::wstring runtimeSha256;
 };
 
+bool VerifyManifestSignature(const std::wstring& manifestPath, const std::wstring& sigPath,
+    std::wstring& error)
+{
+    std::vector<uint8_t> manifest;
+    std::vector<uint8_t> signature;
+    if (!ReadBinaryFile(manifestPath, manifest) || !ReadBinaryFile(sigPath, signature)) {
+        error = L"无法读取清单或签名";
+        return false;
+    }
+
+    DWORD derLen = 0;
+    if (!CryptStringToBinaryW(kManifestPublicKey, static_cast<DWORD>(wcslen(kManifestPublicKey)),
+            CRYPT_STRING_BASE64, nullptr, &derLen, nullptr, nullptr) || !derLen) {
+        error = L"公钥解码失败";
+        return false;
+    }
+    std::vector<BYTE> der(derLen);
+    if (!CryptStringToBinaryW(kManifestPublicKey, static_cast<DWORD>(wcslen(kManifestPublicKey)),
+            CRYPT_STRING_BASE64, der.data(), &derLen, nullptr, nullptr)) {
+        error = L"公钥解码失败";
+        return false;
+    }
+
+    CERT_PUBLIC_KEY_INFO* keyInfo = nullptr;
+    DWORD keyInfoLen = 0;
+    if (!CryptDecodeObjectEx(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, X509_PUBLIC_KEY_INFO,
+            der.data(), derLen, CRYPT_DECODE_ALLOC_FLAG, nullptr, &keyInfo, &keyInfoLen)) {
+        error = L"公钥解析失败";
+        return false;
+    }
+
+    HCRYPTPROV provider = 0;
+    HCRYPTKEY publicKey = 0;
+    HCRYPTHASH hash = 0;
+    bool valid = false;
+    if (!CryptAcquireContextW(&provider, nullptr, nullptr, PROV_RSA_AES, CRYPT_VERIFYCONTEXT)) {
+        error = L"加密服务初始化失败";
+    } else if (!CryptImportPublicKeyInfo(provider, X509_ASN_ENCODING | PKCS_7_ASN_ENCODING,
+            keyInfo, &publicKey)) {
+        error = L"公钥导入失败";
+    } else if (!CryptCreateHash(provider, CALG_SHA_256, 0, 0, &hash)) {
+        error = L"哈希初始化失败";
+    } else if (!CryptHashData(hash, manifest.data(), static_cast<DWORD>(manifest.size()), 0)) {
+        error = L"清单哈希失败";
+    } else {
+        // CryptoAPI expects RSA signatures in little-endian byte order while
+        // Node/OpenSSL emit the standard big-endian form.
+        std::reverse(signature.begin(), signature.end());
+        valid = CryptVerifySignatureW(hash, signature.data(), static_cast<DWORD>(signature.size()),
+            publicKey, nullptr, 0) != FALSE;
+        if (!valid) error = L"清单签名校验失败";
+    }
+
+    if (hash) CryptDestroyHash(hash);
+    if (publicKey) CryptDestroyKey(publicKey);
+    if (provider) CryptReleaseContext(provider, 0);
+    LocalFree(keyInfo);
+    return valid;
+}
+
 bool FetchLatestReleaseInfo(ReleaseInfo& info, std::wstring& error)
 {
     if (!FetchLatestReleaseImpl(info.version, error)) return false;
 
     const std::wstring manifest = JoinPath(TempDirectory(), L"CEP-ZH-manifest.json");
+    const std::wstring signature = JoinPath(TempDirectory(), L"CEP-ZH-manifest.sig");
     DeleteFileW(manifest.c_str());
+    DeleteFileW(signature.c_str());
     const wchar_t* manifestSources[] = {
         L"https://github.com/Three-LEI/CEP-ZH/releases/latest/download/CEP-ZH-manifest.json",
         L"https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/latest/download/CEP-ZH-manifest.json",
@@ -298,15 +363,31 @@ bool FetchLatestReleaseInfo(ReleaseInfo& info, std::wstring& error)
     bool manifestReady = false;
     for (const wchar_t* source : manifestSources) {
         std::wstring manifestError;
-        if (HttpDownload(source, manifest, nullptr, manifestError)) {
-            manifestReady = true;
-            break;
+        std::wstring sigSource = source;
+        sigSource.replace(sigSource.size() - 5, 5, L".sig");
+        if (!HttpDownload(source, manifest, nullptr, manifestError)) {
+            DeleteFileW(manifest.c_str());
+            error = manifestError;
+            continue;
         }
-        DeleteFileW(manifest.c_str());
-        error = manifestError;
+        if (!HttpDownload(sigSource, signature, nullptr, manifestError)) {
+            DeleteFileW(manifest.c_str());
+            DeleteFileW(signature.c_str());
+            error = manifestError;
+            continue;
+        }
+        if (!VerifyManifestSignature(manifest, signature, manifestError)) {
+            DeleteFileW(manifest.c_str());
+            DeleteFileW(signature.c_str());
+            error = manifestError;
+            continue;
+        }
+        DeleteFileW(signature.c_str());
+        manifestReady = true;
+        break;
     }
     if (!manifestReady) {
-        if (error.empty()) error = L"无法获取最新版本清单";
+        if (error.empty()) error = L"无法获取或验证最新版本清单";
         return false;
     }
 

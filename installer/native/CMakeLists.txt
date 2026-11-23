@@ -63,6 +63,7 @@ target_link_libraries(CepZhInstaller PRIVATE
     user32
     gdi32
     advapi32
+    crypt32
 )
 
 target_link_options(CepZhInstaller PRIVATE

@@ -28,3 +28,5 @@ installer/native/*.ilk
 *.tmp
 .DS_Store
 Thumbs.db
+
+tools/release/private.pem
