@@ -162,17 +162,19 @@
   function pluginEntries(key) {
     var p = loadPlugin(key);
     var common = S.common.strings;
+    var cleared = !!p.user.cleared;
     var keys = new Set();
     Object.keys(p.user.strings || {}).forEach(function (k) { keys.add(k); });
     Object.keys(p.bundled.strings || {}).forEach(function (k) { keys.add(k); });
     var out = [];
     keys.forEach(function (orig) {
       if (isJunk(orig)) return;
-      var uv = p.user.strings[orig] || '';
+      var hasUser = Object.prototype.hasOwnProperty.call(p.user.strings || {}, orig);
+      var uv = hasUser ? (p.user.strings[orig] || '') : '';
       var bv = p.bundled.strings[orig] || '';
       var cv = common[orig] || '';
-      var tr = uv || bv || cv || '';
-      var status = uv ? 'plugin' : (bv ? 'builtin' : (cv ? 'common' : 'untranslated'));
+      var tr = uv ? uv : (cleared ? '' : (bv || cv || ''));
+      var status = uv ? 'plugin' : (cleared ? 'untranslated' : (bv ? 'builtin' : (cv ? 'common' : 'untranslated')));
       out.push({ orig: orig, tr: tr, uv: uv, bv: bv, cv: cv, status: status });
     });
     out.sort(function (a, b) {
@@ -539,16 +541,19 @@
 
   function clearPluginTranslations() {
     if (!S.key) { toast('先选择一个插件'); return; }
+    var entries = pluginEntries(S.key);
+    if (!entries.length) { toast('当前插件没有可清空的词条'); return; }
+    if (!confirm('清空 ' + (loadPlugin(S.key).name || S.key) + ' 的译文？\n\n词条会保留，译文会变为空白；之后可以重新翻译或手动填写。')) return;
     var p = loadPlugin(S.key);
-    var count = Object.keys(p.user.strings || {}).length;
-    if (!count) { toast('当前插件没有本机译文'); return; }
-    if (!confirm('清空 ' + (p.name || S.key) + ' 的本机译文？\n\n内置字典和公共字典会继续保留。')) return;
-    p.user.strings = {};
+    var strings = {};
+    entries.forEach(function (e) { strings[e.orig] = ''; });
+    p.user.strings = strings;
+    p.user.cleared = true;
     if (writeJson(EXT + '/' + S.key + '.json', p.user)) {
       S.sig = '';
       renderPlugin();
       renderPlugins();
-      toast('已清空该插件的本机译文');
+      toast('已清空译文，词条已保留');
     }
   }
 
@@ -567,7 +572,7 @@
     }
     var clear = $('btnClearPlugin');
     if (clear) {
-      var count = S.key ? Object.keys(loadPlugin(S.key).user.strings || {}).length : 0;
+      var count = S.key ? pluginEntries(S.key).length : 0;
       clear.disabled = running || !S.key || count === 0;
       clear.textContent = '清空译文';
     }

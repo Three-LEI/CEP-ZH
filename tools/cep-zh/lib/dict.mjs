@@ -55,6 +55,10 @@ export function loadDictionaries() {
         byKey.set(key, record);
         byKey.set(key.toLowerCase(), record);
       }
+      if (data.cleared) {
+        record.strings = {};
+        record.cleared = true;
+      }
       for (const [key, value] of Object.entries(data.strings || {})) {
         if (value) record.strings[key] = value;
         else if (!(key in record.strings)) record.strings[key] = '';
@@ -99,7 +103,9 @@ export function buildConfigFor(dicts, { bundle, extId, port }) {
     if (!data || used.includes(data)) continue;
     used.push(data);
     usedFiles.push(...(data.files || []));
+    const cleared = !!data.cleared;
     for (const [source, value] of Object.entries(data.strings || {})) {
+      if (cleared && !value) delete merged[source];
       if (value) merged[source] = value;
     }
     if (Array.isArray(data.patterns)) patterns.push(...data.patterns);
