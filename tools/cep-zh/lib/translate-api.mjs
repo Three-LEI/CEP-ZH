@@ -1,6 +1,7 @@
 // Shared translation API helpers for the agent and CLI.
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 
 const APP_DATA = process.env.APPDATA || '';
 
@@ -38,6 +39,96 @@ function parseJson(text) {
   const m = raw.match(/\{[\s\S]*\}/);
   if (m) { try { return JSON.parse(m[0]); } catch {} }
   throw new Error('translation response is not JSON');
+}
+
+async function fetchJson(url, options = {}, timeout = 20000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    const res = await fetch(url, { ...options, signal: ctrl.signal });
+    const text = await res.text();
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + text.slice(0, 240));
+    try { return JSON.parse(text); } catch { throw new Error('response is not JSON'); }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function mapLimit(list, limit, fn) {
+  const out = new Array(list.length);
+  let next = 0;
+  async function worker() {
+    for (;;) {
+      const i = next++;
+      if (i >= list.length) return;
+      out[i] = await fn(list[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, list.length) }, worker));
+  return out;
+}
+
+function freeTarget(lang, { edge = false } = {}) {
+  const value = String(lang || 'zh-CN');
+  if (!edge) return value;
+  return value === 'zh-CN' ? 'zh-Hans' : value === 'zh-TW' ? 'zh-Hant' : value;
+}
+
+async function translateGoogle(cfg, strings) {
+  const target = freeTarget(cfg.targetLang);
+  const base = (cfg.freeBaseUrl || 'https://translate.googleapis.com').replace(/\/+$/, '');
+  const out = {};
+  await mapLimit(strings, 3, async (s) => {
+    const qs = new URLSearchParams({ client: 'gtx', dt: 't', sl: 'auto', tl: target, q: s });
+    const data = await fetchJson(base + '/translate_a/single?' + qs.toString());
+    const parts = Array.isArray(data) && Array.isArray(data[0]) ? data[0] : [];
+    const text = parts.map((p) => (Array.isArray(p) ? p[0] : '')).join('');
+    if (text) out[s] = text;
+  });
+  return out;
+}
+
+async function translateEdge(cfg, strings) {
+  const target = freeTarget(cfg.targetLang, { edge: true });
+  const url = 'https://edge.microsoft.com/translate/translatetext?isEnterpriseClient=false&to=' + encodeURIComponent(target);
+  const data = await fetchJson(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+    },
+    body: JSON.stringify(strings),
+  }, 30000);
+  const out = {};
+  if (Array.isArray(data)) {
+    data.forEach((item, i) => {
+      const text = item && Array.isArray(item.translations) && item.translations[0] && item.translations[0].text;
+      if (text && strings[i]) out[strings[i]] = text;
+    });
+  }
+  return out;
+}
+
+async function translateYandex(cfg, strings) {
+  const target = String(cfg.targetLang || 'zh-CN').split('-')[0] || 'zh';
+  const out = {};
+  await mapLimit(strings, 2, async (s) => {
+    const body = new URLSearchParams({
+      srv: 'android',
+      ucid: crypto.randomBytes(16).toString('hex'),
+      lang: target,
+      text: s,
+    });
+    const data = await fetchJson('https://translate.yandex.net/api/v1/tr.json/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    if (Number(data.code) !== 200) throw new Error('Yandex code ' + data.code + ' ' + (data.message || ''));
+    const text = Array.isArray(data.text) ? data.text.join('') : '';
+    if (text) out[s] = text;
+  });
+  return out;
 }
 
 async function translateOpenAI(cfg, strings) {
@@ -116,6 +207,12 @@ export async function translateStrings(cfg, strings, { onProgress } = {}) {
       part = await translateOpenAI(cfg, batch);
     } else if (provider === 'deepl') {
       part = await translateDeepL(cfg, batch);
+    } else if (provider === 'google') {
+      part = await translateGoogle(cfg, batch);
+    } else if (provider === 'edge') {
+      part = await translateEdge(cfg, batch);
+    } else if (provider === 'yandex') {
+      part = await translateYandex(cfg, batch);
     } else {
       throw new Error('未知的翻译 provider: ' + provider);
     }
