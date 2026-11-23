@@ -5,11 +5,22 @@ function CEPZH_OPEN_PATH(path, isFile, helper) {
         if (helper) {
             var helperFile = new File(helper);
             // v0.3.3+ helper supports --open and brings Explorer to the foreground.
-            if (helperFile.exists && helperFile.length > 170000 && app && app.system) {
+            if (helperFile.exists && helperFile.length > 170000) {
                 var selector = isFile ? " --select" : "";
-                app.system('"' + helper + '" --open "' +
-                    String(path).replace(/"/g, '\\"') + '"' + selector);
-                return "OK";
+                var command = '"' + helper + '" --open "' +
+                    String(path).replace(/"/g, '\\"') + '"' + selector;
+                try {
+                    if (typeof system !== "undefined" && system.callSystem) {
+                        system.callSystem(command);
+                        return "OK";
+                    }
+                } catch (e) {}
+                try {
+                    if (app && app.system) {
+                        app.system(command);
+                        return "OK";
+                    }
+                } catch (e) {}
             }
         }
     } catch (e) {}
