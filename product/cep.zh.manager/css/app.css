@@ -778,6 +778,38 @@ tbody td { padding: 4px 9px; vertical-align: middle; }
 .link-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 12px; }
 .link-line code { flex: 1; min-width: 160px; color: var(--fg); font-size: 0.75rem; word-break: break-all; }
 .about-meta { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--faint); font: 0.75rem/1.8 var(--mono); }
+#viewAbout { overflow-y: auto; padding-right: 4px; }
+#viewAbout .settings-grid { overflow: visible; }
+.about-files { margin-top: 10px; padding: 13px; min-width: 0; }
+.about-files-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.about-files-head h3 { margin: 0 0 4px; font-size: 1rem; font-weight: 600; }
+.about-files-head .hint { margin-bottom: 8px; }
+.about-files-head .btn { flex: 0 0 auto; }
+.path-list { border-top: 1px solid var(--line); }
+.path-row {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.7fr) minmax(0, 2.5fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+.path-kind { color: var(--faint); font: 0.708rem/1.3 var(--mono); text-transform: uppercase; letter-spacing: 0.4px; }
+.path-main { min-width: 0; }
+.path-main code { display: block; color: var(--fg); font: 0.73rem/1.45 var(--mono); word-break: break-all; }
+.path-desc { margin-top: 2px; color: var(--muted); font-size: 0.75rem; }
+.path-state { padding: 2px 5px; border: 1px solid var(--line-2); color: var(--faint); font: 0.667rem/1.4 var(--mono); white-space: nowrap; }
+.path-state.on { border-color: var(--ok); color: var(--ok); }
+.path-actions { display: flex; gap: 5px; justify-content: flex-end; }
+.path-actions .btn { padding: 4px 7px; font-size: 0.708rem; }
+.path-empty { padding: 12px 0; color: var(--faint); font-size: 0.833rem; }
+@media (max-width: 720px) {
+  .path-row { grid-template-columns: 1fr auto; }
+  .path-kind { display: none; }
+  .path-state { display: none; }
+  .path-main { grid-column: 1; }
+  .path-actions { grid-column: 2; }
+}
 .export-toolbar { display: flex; align-items: center; gap: 6px; padding: 4px 0 8px; }
 .export-list { max-height: 260px; overflow: auto; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .settings-card .export-item {

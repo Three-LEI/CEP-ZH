@@ -274,6 +274,187 @@
     try { localStorage.setItem('cepzh.theme.v3', S.theme); } catch (e) {}
   }
 
+  function envValue(name) {
+    try {
+      if (typeof process !== 'undefined' && process.env && process.env[name]) return process.env[name];
+    } catch (e) {}
+    return '';
+  }
+
+  function localDataPath() {
+    var value = envValue('LOCALAPPDATA');
+    if (value) return nativePath(value);
+    return APP.replace(/[\\/]Roaming[\\/]?$/i, '/Local');
+  }
+
+  function tempPath() {
+    var value = envValue('TEMP') || envValue('TMP');
+    return value ? nativePath(value) : localDataPath() + '/Temp';
+  }
+
+  function desktopPath() {
+    try {
+      var value = nativePath(host.getSystemPath('desktop'));
+      if (value) return value;
+    } catch (e) {}
+    var profile = envValue('USERPROFILE');
+    return profile ? nativePath(profile) + '/Desktop' : '';
+  }
+
+  function commonFilesPath() {
+    try {
+      var value = nativePath(host.getSystemPath('commonFiles'));
+      if (value) return value;
+    } catch (e) {}
+    return nativePath(envValue('CommonProgramFiles') || 'C:/Program Files/Common Files');
+  }
+
+  function pathExists(path) {
+    if (!FS || !path) return false;
+    try {
+      var st = FS.stat(path);
+      return st && st.err === 0;
+    } catch (e) { return false; }
+  }
+
+  function formatPathSize(path) {
+    if (!FS) return '';
+    try {
+      var st = FS.stat(path);
+      if (!st || st.err !== 0 || !st.size) return '';
+      var size = st.size;
+      if (size < 1024) return size + ' B';
+      if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB';
+      return (size / 1024 / 1024).toFixed(1) + ' MB';
+    } catch (e) { return ''; }
+  }
+
+  function localItems() {
+    var local = localDataPath();
+    var temp = tempPath();
+    var adobe = APP ? APP + '/Adobe/CEP/extensions' : '';
+    var common = commonFilesPath();
+    var desktop = desktopPath();
+    var agent = local + '/CEP-ZH/agent';
+    var tools = agent + '/tools/cep-zh';
+    var items = [
+      { group: '用户数据', label: '用户配置与状态', path: BASE, kind: 'dir', desc: 'config.json、control.json、state.json、debug-baseline.json' },
+      { group: '用户数据', label: '用户字典', path: DICT, kind: 'dir', desc: 'global.json 与插件译文' },
+      { group: '用户数据', label: '插件字典', path: EXT, kind: 'dir', desc: '每个 CEP 插件一个 JSON 文件' },
+      { group: '用户数据', label: '内置字典', path: BUNDLED, kind: 'dir', desc: '管理器自带的默认词语和模式' },
+      { group: '用户数据', label: 'AI / 翻译配置', path: CONFIG, kind: 'file', desc: 'provider、模型、API Key、目标语言' },
+      { group: '用户数据', label: '全局控制', path: CONTROL, kind: 'file', desc: '全局开关、插件开关、翻译/修复指令' },
+      { group: '用户数据', label: 'Agent 运行状态', path: AGENT_STATE, kind: 'file', desc: '面板连接、注入状态、待修复 .debug' },
+      { group: '用户数据', label: '调试基线', path: BASE + '/debug-baseline.json', kind: 'file', desc: '扩展与 .debug 扫描基线' },
+      { group: 'Agent', label: 'Agent 安装目录', path: agent, kind: 'dir', desc: '运行时脚本、修复工具和状态' },
+      { group: 'Agent', label: '调试分配 / 备份索引', path: tools + '/state.json', kind: 'file', desc: '.debug 端口分配和 .cep-zh.bak 备份记录' },
+      { group: 'Agent', label: '抓词 / 扫描缓存', path: tools + '/catalog', kind: 'dir', desc: 'catalog 命令输出的面板字符串缓存' },
+      { group: 'Agent', label: '修复工具', path: agent + '/bin/CEP汉化修复工具.exe', kind: 'file', desc: '管理员权限写入 .debug 的原生工具' }
+    ];
+    if (local) {
+      items.push(
+        { group: '安装器', label: '本地数据根目录', path: local + '/CEP-ZH', kind: 'dir', desc: 'Agent、Node、缓存、安装器和版本信息' },
+        { group: '运行时', label: 'Node.js 运行时', path: local + '/CEP-ZH/node', kind: 'dir', desc: '便携 Node.js（未使用系统 Node 时）' },
+        { group: '缓存', label: '字体缓存', path: local + '/CEP-ZH/font-cache', kind: 'dir', desc: '旧版管理器字体缓存，可安全删除' },
+        { group: '安装器', label: '安装器副本', path: local + '/CEP-ZH/CepZhInstaller.exe', kind: 'file', desc: '桌面快捷方式实际启动的安装器' },
+        { group: '安装器', label: '已安装版本', path: local + '/CEP-ZH/version.json', kind: 'file', desc: '安装器读取的本地版本信息' }
+      );
+    }
+    if (temp) {
+      items.push(
+        { group: '日志 / 临时', label: '安装日志', path: temp + '/CEP-ZH-installer.log', kind: 'file', desc: '安装、下载与 .debug 初始化日志' },
+        { group: '日志 / 临时', label: '安装临时目录', path: temp, kind: 'dir', desc: 'CEP-ZH-installer-* 下载/解压目录，正常会自动清理' },
+        { group: '日志 / 临时', label: '提权任务目录', path: temp + '/CEP-ZH', kind: 'dir', desc: '修复工具 job/result 临时文件' }
+      );
+    }
+    if (adobe) {
+      items.push(
+        { group: 'Adobe', label: '管理器扩展', path: adobe + '/cep.zh.manager', kind: 'dir', desc: '管理面板本体' },
+        { group: 'Adobe', label: 'CEP 扩展根目录', path: adobe, kind: 'dir', desc: '所有 CEP 扩展，含 .debug / .cep-zh.bak' },
+        { group: 'Adobe', label: '插件 .debug / 备份', path: adobe, kind: 'dir', desc: '按插件分布；具体文件见调试分配索引' }
+      );
+    }
+    if (common) {
+      items.push({ group: 'Adobe', label: 'CEP12 引擎代理', path: common + '/Adobe/CEP', kind: 'dir', desc: 'VCRUNTIME140_1.dll 代理所在引擎目录' });
+    }
+    if (desktop) {
+      items.push({ group: '快捷方式', label: '桌面快捷方式', path: desktop + '/CEP 汉化管理器.lnk', kind: 'file', desc: '打开本地安装器' });
+    }
+    return items.filter(function (item) { return item.path; });
+  }
+
+  function explorerOpen(path, isFile) {
+    var win = String(path).replace(/\//g, '\\');
+    var exists = pathExists(path);
+    var parent = win.replace(/\\[^\\]+$/, '');
+    try {
+      var req = (typeof require === 'function') ? require : window.require;
+      if (req) {
+        var cp = req('child_process');
+        if (isFile && exists) cp.execFile('explorer.exe', ['/select,', win], { windowsHide: true });
+        else cp.execFile('explorer.exe', [exists ? win : parent], { windowsHide: true });
+        return;
+      }
+    } catch (e) {}
+    openExternal('file:///' + (exists ? win : parent).replace(/\\/g, '/'));
+  }
+
+  function fallbackCopy(text) {
+    try {
+      var input = document.createElement('textarea');
+      input.value = text;
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      toast('路径已复制');
+    } catch (e) { toast('无法复制路径'); }
+  }
+
+  function copyPath(path) {
+    var text = String(path).replace(/\//g, '\\');
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { toast('路径已复制'); }, function () { fallbackCopy(text); });
+        return;
+      }
+    } catch (e) {}
+    fallbackCopy(text);
+  }
+
+  function renderStoragePaths() {
+    var list = $('pathList');
+    if (!list) return;
+    var items = localItems();
+    if (!items.length) {
+      list.innerHTML = '<div class="path-empty">没有可显示的本机路径。</div>';
+      return;
+    }
+    var html = '';
+    items.forEach(function (item, i) {
+      var exists = pathExists(item.path);
+      var size = item.kind === 'file' ? formatPathSize(item.path) : '';
+      var state = exists ? (size || '存在') : '未生成';
+      html += '<div class="path-row">' +
+        '<div class="path-kind">' + esc(item.group) + '</div>' +
+        '<div class="path-main"><code>' + esc(String(item.path).replace(/\//g, '\\')) + '</code>' +
+        '<div class="path-desc">' + esc(item.label + (item.desc ? ' · ' + item.desc : '')) + '</div></div>' +
+        '<span class="path-state' + (exists ? ' on' : '') + '">' + esc(state) + '</span>' +
+        '<div class="path-actions">' +
+        '<button class="btn" type="button" data-open="' + i + '">打开</button>' +
+        '<button class="btn" type="button" data-copy="' + i + '">复制</button></div></div>';
+    });
+    list.innerHTML = html;
+    Array.prototype.forEach.call(list.querySelectorAll('[data-open]'), function (b) {
+      b.onclick = function () { var item = items[Number(b.getAttribute('data-open'))]; if (item) explorerOpen(item.path, item.kind === 'file'); };
+    });
+    Array.prototype.forEach.call(list.querySelectorAll('[data-copy]'), function (b) {
+      b.onclick = function () { var item = items[Number(b.getAttribute('data-copy'))]; if (item) copyPath(item.path); };
+    });
+  }
+
   function renderAbout() {
     var gh = $('githubUrl');
     var gl = $('githubLink');
@@ -281,6 +462,7 @@
     if (gh) gh.textContent = GITHUB_URL;
     if (gl) gl.href = GITHUB_URL;
     if (bl) bl.href = BILI_URL;
+    renderStoragePaths();
   }
 
   /* ---------------- sidebar / views ---------------- */
@@ -1089,6 +1271,7 @@
         $('updateNotice').classList.add('hidden');
       };
     }
+    if ($('btnRefreshPaths')) $('btnRefreshPaths').onclick = renderStoragePaths;
     $('pluginToggle').onchange = function () {
       if (!S.key) return;
       var disabled = S.control.disabledPlugins.slice();
