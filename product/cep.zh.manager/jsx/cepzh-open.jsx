@@ -1,6 +1,18 @@
 // CEP-ZH host-side opener. Runs in the Adobe application (ExtendScript),
 // so it does not depend on Node.js being enabled in the CEP panel.
-function CEPZH_OPEN_PATH(path, isFile) {
+function CEPZH_OPEN_PATH(path, isFile, helper) {
+    try {
+        if (helper) {
+            var helperFile = new File(helper);
+            // v0.3.3+ helper supports --open and brings Explorer to the foreground.
+            if (helperFile.exists && helperFile.length > 170000 && app && app.system) {
+                var selector = isFile ? " --select" : "";
+                app.system('"' + helper + '" --open "' +
+                    String(path).replace(/"/g, '\\"') + '"' + selector);
+                return "OK";
+            }
+        }
+    } catch (e) {}
     try {
         if (isFile) {
             var file = new File(path);

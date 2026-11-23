@@ -56,6 +56,95 @@ bool ContainsNoCase(const std::wstring& s, const std::wstring& needle) {
     return Lower(s).find(Lower(needle)) != std::wstring::npos;
 }
 
+std::wstring ParentFolder(const std::wstring& path) {
+    std::wstring p = path;
+    while (p.size() > 3 && (p.back() == L'\\' || p.back() == L'/')) p.pop_back();
+    size_t slash = p.find_last_of(L"\\/");
+    if (slash == std::wstring::npos) return p;
+    if (slash == 2 && p.size() > 1 && p[1] == L':') return p.substr(0, 3);
+    return p.substr(0, slash);
+}
+
+std::wstring LeafName(const std::wstring& path) {
+    std::wstring p = path;
+    while (p.size() > 3 && (p.back() == L'\\' || p.back() == L'/')) p.pop_back();
+    size_t slash = p.find_last_of(L"\\/");
+    return slash == std::wstring::npos ? p : p.substr(slash + 1);
+}
+
+void ActivateExplorerWindow(HWND hwnd) {
+    if (!hwnd || !IsWindow(hwnd)) return;
+    ShowWindow(hwnd, SW_RESTORE);
+
+    const HWND foreground = GetForegroundWindow();
+    const DWORD foregroundThread = foreground
+        ? GetWindowThreadProcessId(foreground, nullptr) : 0;
+    const DWORD currentThread = GetCurrentThreadId();
+    const bool attached = foregroundThread && foregroundThread != currentThread &&
+        AttachThreadInput(currentThread, foregroundThread, TRUE);
+    SetForegroundWindow(hwnd);
+    BringWindowToTop(hwnd);
+    SetFocus(hwnd);
+    if (attached) AttachThreadInput(currentThread, foregroundThread, FALSE);
+}
+
+struct ExplorerSearch {
+    std::wstring leaf;
+    HWND found = nullptr;
+};
+
+BOOL CALLBACK FindExplorerProc(HWND hwnd, LPARAM lParam) {
+    auto* search = reinterpret_cast<ExplorerSearch*>(lParam);
+    if (!search) return TRUE;
+    wchar_t className[64]{};
+    GetClassNameW(hwnd, className, (int)std::size(className));
+    if (_wcsicmp(className, L"CabinetWClass") != 0 &&
+        _wcsicmp(className, L"ExploreWClass") != 0) return TRUE;
+    wchar_t title[512]{};
+    GetWindowTextW(hwnd, title, (int)std::size(title));
+    if (search->leaf.empty() || ContainsNoCase(title, search->leaf)) {
+        search->found = hwnd;
+        return FALSE;
+    }
+    return TRUE;
+}
+
+bool ForegroundExplorer(const std::wstring& leaf) {
+    for (int attempt = 0; attempt < 24; ++attempt) {
+        ExplorerSearch search;
+        search.leaf = leaf;
+        EnumWindows(FindExplorerProc, reinterpret_cast<LPARAM>(&search));
+        if (search.found) {
+            ActivateExplorerWindow(search.found);
+            return true;
+        }
+        Sleep(100);
+    }
+    return false;
+}
+
+int OpenInExplorer(const std::wstring& path, bool selectFile) {
+    if (path.empty()) return 1;
+    const std::wstring full = FullPath(path);
+    if (GetFileAttributesW(full.c_str()) == INVALID_FILE_ATTRIBUTES) return 1;
+
+    std::wstring folder = selectFile ? ParentFolder(full) : full;
+    std::wstring params = selectFile
+        ? L"/select,\"" + full + L"\""
+        : L"\"" + full + L"\"";
+    SHELLEXECUTEINFOW sei{};
+    sei.cbSize = sizeof(sei);
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+    sei.lpVerb = L"open";
+    sei.lpFile = L"explorer.exe";
+    sei.lpParameters = params.c_str();
+    sei.nShow = SW_SHOWNORMAL;
+    if (!ShellExecuteExW(&sei)) return 2;
+    if (sei.hProcess) CloseHandle(sei.hProcess);
+    ForegroundExplorer(LeafName(folder));
+    return 0;
+}
+
 bool ReadBytes(const std::wstring& path, std::vector<char>& out) {
     HANDLE h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
         nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -226,14 +315,19 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int) {
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     std::wstring jobPath;
     std::wstring resultPath;
+    std::wstring openPath;
+    bool selectFile = false;
     if (argv) {
-        for (int i = 1; i + 1 < argc; ++i) {
+        for (int i = 1; i < argc; ++i) {
             std::wstring arg = argv[i];
-            if (arg == L"--job") jobPath = argv[++i];
-            else if (arg == L"--result") resultPath = argv[++i];
+            if (arg == L"--job" && i + 1 < argc) jobPath = argv[++i];
+            else if (arg == L"--result" && i + 1 < argc) resultPath = argv[++i];
+            else if (arg == L"--open" && i + 1 < argc) openPath = argv[++i];
+            else if (arg == L"--select") selectFile = true;
         }
         LocalFree(argv);
     }
+    if (!openPath.empty()) return OpenInExplorer(openPath, selectFile);
     if (jobPath.empty() || resultPath.empty()) return 1;
 
     if (!IsElevated()) {
