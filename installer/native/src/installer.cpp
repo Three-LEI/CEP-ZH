@@ -253,10 +253,12 @@ bool HttpDownload(const std::wstring& url, const std::wstring& outPath,
 
 bool ShouldExtract(const std::string& name)
 {
-    return name.find("/product/cep.zh.manager/") != std::string::npos ||
-           name.find("/tools/cep-zh/") != std::string::npos ||
-           name.find("/tools/elevate/dist/") != std::string::npos ||
-           name.find("/tools/bootstrap/dist/VCRUNTIME140_1.dll") != std::string::npos;
+    std::string normalized = name;
+    std::replace(normalized.begin(), normalized.end(), '\\', '/');
+    return normalized.find("/product/cep.zh.manager/") != std::string::npos ||
+           normalized.find("/tools/cep-zh/") != std::string::npos ||
+           normalized.find("/tools/elevate/dist/") != std::string::npos ||
+           normalized.find("/tools/bootstrap/dist/VCRUNTIME140_1.dll") != std::string::npos;
 }
 
 bool ExtractZip(const std::wstring& zipPath, const std::wstring& dest, bool onlyCep,
