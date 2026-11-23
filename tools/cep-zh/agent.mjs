@@ -162,8 +162,9 @@ function pendingDebug() {
     if (!bundle || bundle.hasDebugFile) continue;
     const bundleId = String(bundle.bundleId || '');
     if (!bundleId || bundleId.startsWith('cep.zh.')) continue;
-    const known = debugBaseline && debugBaseline.get(String(bundle.basePath).toLowerCase().replace(/\\/g, '/').replace(/\/+$/, ''));
-    if (known && known.hasDebug === true) continue;
+    // A missing .debug is actionable even when it existed at baseline time.
+    // Baseline tracks the initial state, but a later manual deletion (or a
+    // plugin update) must still surface in the manager.
     const hosts = (bundle.hosts || []).map((h) => h.name).filter((h) => installedHosts.has(h));
     if (!hosts.length) continue;
     let writable = false;
