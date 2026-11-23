@@ -779,8 +779,8 @@ tbody td { padding: 4px 9px; vertical-align: middle; }
 .link-line code { flex: 1; min-width: 160px; color: var(--fg); font-size: 0.75rem; word-break: break-all; }
 .about-meta { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--faint); font: 0.75rem/1.8 var(--mono); }
 #viewAbout { overflow-y: auto; padding-right: 4px; }
-#viewAbout .settings-grid { overflow: visible; }
-.about-files { margin-top: 10px; padding: 13px; min-width: 0; }
+#viewAbout .settings-grid { overflow: visible; flex: 0 0 auto; }
+.about-files { margin-top: 10px; padding: 13px; min-width: 0; flex: 0 0 auto; }
 .about-files-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .about-files-head h3 { margin: 0 0 4px; font-size: 1rem; font-weight: 600; }
 .about-files-head .hint { margin-bottom: 8px; }
