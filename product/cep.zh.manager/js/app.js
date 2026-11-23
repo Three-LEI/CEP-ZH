@@ -352,7 +352,8 @@
       { group: 'Agent', label: 'Agent 安装目录', path: agent, kind: 'dir', desc: '运行时脚本、修复工具和状态' },
       { group: 'Agent', label: '调试分配 / 备份索引', path: tools + '/state.json', kind: 'file', desc: '.debug 端口分配和 .cep-zh.bak 备份记录' },
       { group: 'Agent', label: '抓词 / 扫描缓存', path: tools + '/catalog', kind: 'dir', desc: 'catalog 命令输出的面板字符串缓存' },
-      { group: 'Agent', label: '修复工具', path: agent + '/bin/CEP汉化修复工具.exe', kind: 'file', desc: '管理员权限写入 .debug 的原生工具' }
+      { group: 'Agent', label: '修复工具', path: agent + '/bin/CEP汉化修复工具.exe', kind: 'file', desc: '管理员权限写入 .debug 的原生工具' },
+      { group: '管理面板', label: '宿主打开脚本', path: EXTENSION + '/jsx/cepzh-open.jsx', kind: 'file', desc: '通过 ExtendScript 打开文件、文件夹、链接和安装器' }
     ];
     if (local) {
       items.push(
@@ -396,52 +397,59 @@
     return true;
   }
 
-  function nodeRequire() {
-    try { if (typeof require === 'function') return require; } catch (e) {}
-    try { if (window.require) return window.require; } catch (e) {}
-    return null;
+  function jsxString(value) {
+    return '"' + String(value == null ? '' : value)
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\r/g, '\\r')
+      .replace(/\n/g, '\\n') + '"';
   }
 
-  function runDetached(exe, args) {
-    var req = nodeRequire();
-    if (!req) return false;
+  function openViaJsx(action, path, isFile, onError) {
+    if (!host || typeof host.evalScript !== 'function' || !EXTENSION) {
+      onError();
+      return;
+    }
+    var jsx = EXTENSION + '/jsx/cepzh-open.jsx';
+    var fn = action === 'url' ? 'CEPZH_OPEN_URL' : (action === 'run' ? 'CEPZH_RUN_FILE' : 'CEPZH_OPEN_PATH');
+    var args = jsxString(path);
+    if (action === 'path') args += ',' + (isFile ? 'true' : 'false');
+    var expr = '$.evalFile(' + jsxString(jsx) + '); ' + fn + '(' + args + ');';
     try {
-      req('child_process').execFile(exe, args, { windowsHide: true }, function () {});
-      return true;
-    } catch (e) { return false; }
+      host.evalScript(expr, function (result) {
+        if (String(result) !== 'OK') onError();
+      });
+    } catch (e) {
+      onError();
+    }
   }
 
   function explorerOpen(path, isFile) {
     if (!canOpenNow()) return;
-    var win = String(path).replace(/\//g, '\\');
-    var exists = pathExists(path);
-    var parent = win.replace(/\\[^\\]+$/, '');
-    if (isFile && exists) {
-      if (runDetached('explorer.exe', ['/select,', win])) return;
-    } else {
-      if (runDetached('explorer.exe', [exists ? win : parent])) return;
-    }
-    copyPath(path);
-    toast('当前 CEP 无法安全打开，路径已复制');
+    openViaJsx('path', path, isFile, function () {
+      copyPath(path);
+      toast('宿主未能打开，路径已复制');
+    });
   }
 
-  function openUrlSafe(url) {
-    if (!canOpenNow()) return;
-    if (runDetached('cmd.exe', ['/c', 'start', '', url])) return;
-    copyPath(url);
-    toast('无法打开浏览器，链接已复制');
+  function openUrlSafe(url, skipGuard) {
+    if (!skipGuard && !canOpenNow()) return;
+    openViaJsx('url', url, false, function () {
+      copyPath(url);
+      toast('宿主未能打开链接，已复制');
+    });
   }
 
   function openInstallerUpdate() {
     if (!canOpenNow()) return;
     var local = localDataPath() + '/CEP-ZH/CepZhInstaller.exe';
     if (pathExists(local)) {
-      var win = local.replace(/\//g, '\\');
-      if (runDetached('cmd.exe', ['/c', 'start', '', win])) return;
+      openViaJsx('run', local, false, function () {
+        openUrlSafe(RELEASES_URL, true);
+      });
+      return;
     }
-    if (runDetached('cmd.exe', ['/c', 'start', '', RELEASES_URL])) return;
-    copyPath(RELEASES_URL);
-    toast('无法打开安装器，发布页链接已复制');
+    openUrlSafe(RELEASES_URL, true);
   }
 
   function fallbackCopy(text) {
