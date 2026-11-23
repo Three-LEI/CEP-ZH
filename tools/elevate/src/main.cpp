@@ -12,6 +12,8 @@
 
 namespace {
 
+bool ReadBytes(const std::wstring& path, std::vector<char>& out);
+
 std::wstring Utf8ToWide(const std::string& s) {
     if (s.empty()) return {};
     int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), nullptr, 0);
@@ -143,6 +145,20 @@ int OpenInExplorer(const std::wstring& path, bool selectFile) {
     if (sei.hProcess) CloseHandle(sei.hProcess);
     ForegroundExplorer(LeafName(folder));
     return 0;
+}
+
+int OpenRequest(const std::wstring& requestPath) {
+    std::vector<char> bytes;
+    if (!ReadBytes(requestPath, bytes)) return 1;
+    std::wstring text = Utf8ToWide(std::string(bytes.begin(), bytes.end()));
+    if (!text.empty() && text[0] == 0xFEFF) text.erase(0, 1);
+    size_t nl = text.find(L'\n');
+    if (nl == std::wstring::npos) return 2;
+    std::wstring path = text.substr(0, nl);
+    std::wstring flag = text.substr(nl + 1);
+    while (!path.empty() && (path.back() == L'\r' || path.back() == L' ')) path.pop_back();
+    while (!flag.empty() && (flag.back() == L'\r' || flag.back() == L'\n' || flag.back() == L' ')) flag.pop_back();
+    return OpenInExplorer(path, flag == L"1");
 }
 
 bool ReadBytes(const std::wstring& path, std::vector<char>& out) {
@@ -316,6 +332,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int) {
     std::wstring jobPath;
     std::wstring resultPath;
     std::wstring openPath;
+    std::wstring openRequestPath;
     bool selectFile = false;
     if (argv) {
         for (int i = 1; i < argc; ++i) {
@@ -323,10 +340,12 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int) {
             if (arg == L"--job" && i + 1 < argc) jobPath = argv[++i];
             else if (arg == L"--result" && i + 1 < argc) resultPath = argv[++i];
             else if (arg == L"--open" && i + 1 < argc) openPath = argv[++i];
+            else if (arg == L"--open-request" && i + 1 < argc) openRequestPath = argv[++i];
             else if (arg == L"--select") selectFile = true;
         }
         LocalFree(argv);
     }
+    if (!openRequestPath.empty()) return OpenRequest(openRequestPath);
     if (!openPath.empty()) return OpenInExplorer(openPath, selectFile);
     if (jobPath.empty() || resultPath.empty()) return 1;
 

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ExtensionManifest Version="7.0" ExtensionBundleId="cep.zh.manager" ExtensionBundleVersion="0.3.4"
+<ExtensionManifest Version="7.0" ExtensionBundleId="cep.zh.manager" ExtensionBundleVersion="0.4.0"
     ExtensionBundleName="CEP 汉化管理器" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
-    <Extension Id="cep.zh.manager.panel" Version="0.3.4" />
-    <Extension Id="cep.zh.agent" Version="0.3.4" />
+    <Extension Id="cep.zh.manager.panel" Version="0.4.0" />
+    <Extension Id="cep.zh.agent" Version="0.4.0" />
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>

@@ -357,11 +357,10 @@
     ];
     if (local) {
       items.push(
-        { group: '安装器', label: '本地数据根目录', path: local + '/CEP-ZH', kind: 'dir', desc: 'Agent、Node、缓存、安装器和版本信息' },
+        { group: '安装器', label: '本地数据根目录', path: local + '/CEP-ZH', kind: 'dir', desc: 'Agent、Node、缓存和版本信息（安装器不在此保存副本）' },
         { group: '运行时', label: 'Node.js 运行时', path: local + '/CEP-ZH/node', kind: 'dir', desc: '便携 Node.js（未使用系统 Node 时）' },
         { group: '缓存', label: '字体缓存', path: local + '/CEP-ZH/font-cache', kind: 'dir', desc: '旧版管理器字体缓存，可安全删除' },
-        { group: '安装器', label: '安装器副本', path: local + '/CEP-ZH/CepZhInstaller.exe', kind: 'file', desc: '桌面快捷方式实际启动的安装器' },
-        { group: '安装器', label: '已安装版本', path: local + '/CEP-ZH/version.json', kind: 'file', desc: '安装器读取的本地版本信息' }
+        { group: '安装器', label: '已安装版本', path: local + '/CEP-ZH/version.json', kind: 'file', desc: '已安装运行时版本信息' }
       );
     }
     if (temp) {
@@ -381,9 +380,6 @@
     }
     if (common) {
       items.push({ group: 'Adobe', label: 'CEP12 引擎代理', path: common + '/Adobe/CEP', kind: 'dir', desc: 'VCRUNTIME140_1.dll 代理所在引擎目录' });
-    }
-    if (desktop) {
-      items.push({ group: '快捷方式', label: '桌面快捷方式', path: desktop + '/CEP 汉化管理器.lnk', kind: 'file', desc: '打开本地安装器' });
     }
     return items.filter(function (item) { return item.path; });
   }
@@ -406,7 +402,9 @@
   }
 
   function helperPath() {
-    return localDataPath() + '/CEP-ZH/agent/bin/CEP汉化修复工具.exe';
+    var dir = localDataPath() + '/CEP-ZH/agent/bin';
+    var ascii = dir + '/cepzh-elevate.exe';
+    return pathExists(ascii) ? ascii : dir + '/CEP汉化修复工具.exe';
   }
 
   function openViaJsx(action, path, isFile, onError, helper) {
@@ -438,10 +436,14 @@
 
   function openUrlSafe(url, skipGuard) {
     if (!skipGuard && !canOpenNow()) return;
-    openViaJsx('url', url, false, function () {
-      copyPath(url);
-      toast('宿主未能打开链接，已复制');
-    });
+    try {
+      if (window.cep && window.cep.util && window.cep.util.openURLInDefaultBrowser) {
+        window.cep.util.openURLInDefaultBrowser(url);
+        return;
+      }
+    } catch (e) {}
+    copyPath(url);
+    toast('无法打开浏览器，链接已复制');
   }
 
   function openInstallerUpdate() {

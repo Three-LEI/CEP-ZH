@@ -1,26 +1,34 @@
 // CEP-ZH host-side opener. Runs in the Adobe application (ExtendScript),
 // so it does not depend on Node.js being enabled in the CEP panel.
+//
+// File/folder paths are passed through a UTF-8 request file. This keeps the
+// command line ASCII-only and avoids ExtendScript/CMD Unicode path failures.
 function CEPZH_OPEN_PATH(path, isFile, helper) {
     try {
         if (helper) {
             var helperFile = new File(helper);
-            // v0.3.3+ helper supports --open and brings Explorer to the foreground.
-            if (helperFile.exists && helperFile.length > 170000) {
-                var selector = isFile ? " --select" : "";
-                var command = '"' + helper + '" --open "' +
-                    String(path).replace(/"/g, '\\"') + '"' + selector;
-                try {
-                    if (typeof system !== "undefined" && system.callSystem) {
-                        system.callSystem(command);
-                        return "OK";
-                    }
-                } catch (e) {}
-                try {
-                    if (app && app.system) {
-                        app.system(command);
-                        return "OK";
-                    }
-                } catch (e) {}
+            // v0.4.0+ helper supports --open-request and foreground activation.
+            if (helperFile.exists && helperFile.length > 178000) {
+                var request = new File(Folder.temp.fsName + "/cepzh-open-request.txt");
+                request.encoding = "UTF-8";
+                if (request.open("w")) {
+                    request.write(String(path) + "\n" + (isFile ? "1" : "0") + "\n");
+                    request.close();
+                    var command = 'cmd.exe /c ""' + helperFile.fsName +
+                        '" --open-request "' + request.fsName + '""';
+                    try {
+                        if (typeof system !== "undefined" && system.callSystem) {
+                            system.callSystem(command);
+                            return "OK";
+                        }
+                    } catch (e) {}
+                    try {
+                        if (app && app.system) {
+                            app.system(command);
+                            return "OK";
+                        }
+                    } catch (e) {}
+                }
             }
         }
     } catch (e) {}
@@ -35,28 +43,6 @@ function CEPZH_OPEN_PATH(path, isFile, helper) {
         }
         var folder = new Folder(path);
         if (folder.exists && folder.execute()) return "OK";
-    } catch (e) {}
-    return "ERR";
-}
-
-function CEPZH_RUN_FILE(path) {
-    try {
-        var file = new File(path);
-        if (file.exists && file.execute()) return "OK";
-    } catch (e) {}
-    return "ERR";
-}
-
-function CEPZH_OPEN_URL(url) {
-    try {
-        var tempDir = Folder.temp ? Folder.temp.fsName : "C:/Windows/Temp";
-        var file = new File(tempDir + "/cepzh-open.url");
-        file.encoding = "UTF-8";
-        if (file.open("w")) {
-            file.write("[InternetShortcut]\r\nURL=" + url + "\r\n");
-            file.close();
-            if (file.execute()) return "OK";
-        }
     } catch (e) {}
     return "ERR";
 }
