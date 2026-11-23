@@ -21,6 +21,11 @@
   var CONFIG = BASE + '/config.json';
   var GITHUB_URL = 'https://github.com/Three-LEI/CEP-ZH';
   var BILI_URL = 'https://space.bilibili.com/353544977';
+  var APP_VERSION = '0.2.7';
+  var RELEASES_URL = GITHUB_URL + '/releases/latest';
+  var LATEST_RELEASE_API = 'https://api.github.com/repos/Three-LEI/CEP-ZH/releases/latest';
+  var UPDATE_DISMISS_KEY = 'cepzh.update.dismissed';
+  var UPDATE_CHECK_KEY = 'cepzh.update.checkedAt';
   var EXTENSION = '';
   try { EXTENSION = nativePath(host.getSystemPath('extension')); } catch (e) {}
   var BUNDLED = EXTENSION + '/dict';
@@ -532,6 +537,21 @@
     }
   }
 
+  function clearPluginTranslations() {
+    if (!S.key) { toast('先选择一个插件'); return; }
+    var p = loadPlugin(S.key);
+    var count = Object.keys(p.user.strings || {}).length;
+    if (!count) { toast('当前插件没有本机译文'); return; }
+    if (!confirm('清空 ' + (p.name || S.key) + ' 的本机译文？\n\n内置字典和公共字典会继续保留。')) return;
+    p.user.strings = {};
+    if (writeJson(EXT + '/' + S.key + '.json', p.user)) {
+      S.sig = '';
+      renderPlugin();
+      renderPlugins();
+      toast('已清空该插件的本机译文');
+    }
+  }
+
   /* ---------------- settings / agent ---------------- */
 
   function updateTranslationUI() {
@@ -544,6 +564,12 @@
       $('btnTranslateAll').disabled = running;
       $('btnTranslateAll').textContent = running ? '翻译中…' : 'AI 翻译全部字典';
       $('btnTranslateAll').classList.toggle('running', running);
+    }
+    var clear = $('btnClearPlugin');
+    if (clear) {
+      var count = S.key ? Object.keys(loadPlugin(S.key).user.strings || {}).length : 0;
+      clear.disabled = running || !S.key || count === 0;
+      clear.textContent = '清空译文';
     }
   }
 
@@ -892,6 +918,64 @@
     if (S.view === 'settings') renderSettings();
   }
 
+  function openExternal(url) {
+    try {
+      if (window.cep && window.cep.util && window.cep.util.openURLInDefaultBrowser) {
+        window.cep.util.openURLInDefaultBrowser(url);
+        return;
+      }
+    } catch (e) {}
+    try { window.open(url, '_blank'); } catch (e) {}
+  }
+
+  function parseVersion(v) {
+    return String(v || '').replace(/^v/i, '').split(/[.\-+]/).map(function (x) {
+      var n = parseInt(x, 10);
+      return isFinite(n) ? n : 0;
+    });
+  }
+
+  function isNewerVersion(latest, current) {
+    var a = parseVersion(latest), b = parseVersion(current);
+    for (var i = 0; i < Math.max(a.length, b.length); i++) {
+      var x = a[i] || 0, y = b[i] || 0;
+      if (x !== y) return x > y;
+    }
+    return false;
+  }
+
+  function showUpdateBanner(tag) {
+    var version = String(tag || '').replace(/^v/i, '');
+    if (!version || !isNewerVersion(version, APP_VERSION)) return;
+    try {
+      if (localStorage.getItem(UPDATE_DISMISS_KEY) === version) return;
+    } catch (e) {}
+    $('updateVersion').textContent = 'v' + version;
+    $('updateNotice').classList.remove('hidden');
+    $('updateNotice').setAttribute('data-tag', version);
+  }
+
+  function checkForUpdates() {
+    try {
+      var checked = Number(localStorage.getItem(UPDATE_CHECK_KEY) || 0);
+      if (Date.now() - checked < 6 * 3600 * 1000) return;
+    } catch (e) {}
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', LATEST_RELEASE_API, true);
+    xhr.timeout = 12000;
+    xhr.setRequestHeader('Accept', 'application/vnd.github+json');
+    xhr.onload = function () {
+      try { localStorage.setItem(UPDATE_CHECK_KEY, String(Date.now())); } catch (e) {}
+      if (xhr.status < 200 || xhr.status >= 300) return;
+      var data = null;
+      try { data = JSON.parse(xhr.responseText); } catch (e) { return; }
+      if (!data || !data.tag_name) return;
+      showUpdateBanner(data.tag_name);
+    };
+    xhr.onerror = xhr.ontimeout = function () {};
+    xhr.send();
+  }
+
   /* ---------------- actions ---------------- */
 
   function requestCollect() {
@@ -984,15 +1068,22 @@
         setGlobalEnabled(this.checked);
       };
     }
-    $('btnRestore').onclick = function () {
-      setGlobalEnabled(false);
-    };
     $('btnRepairDebug').onclick = requestDebugRepair;
     $('btnDismissDebug').onclick = function () {
       S.debugDismissed = S.debugSig;
       renderDebugNotice();
     };
     if ($('btnRepairAllDebug')) $('btnRepairAllDebug').onclick = requestDebugRepair;
+    if ($('btnUpdate')) {
+      $('btnUpdate').onclick = function () { openExternal(RELEASES_URL); };
+    }
+    if ($('btnUpdateDismiss')) {
+      $('btnUpdateDismiss').onclick = function () {
+        var tag = $('updateNotice').getAttribute('data-tag') || '';
+        try { if (tag) localStorage.setItem(UPDATE_DISMISS_KEY, tag); } catch (e) {}
+        $('updateNotice').classList.add('hidden');
+      };
+    }
     $('pluginToggle').onchange = function () {
       if (!S.key) return;
       var disabled = S.control.disabledPlugins.slice();
@@ -1014,6 +1105,7 @@
       toast('已刷新');
     };
     $('btnAdd').onclick = function () { openAdd('plugin'); };
+    $('btnClearPlugin').onclick = clearPluginTranslations;
     $('btnAddCommon').onclick = function () { openAdd('global'); };
     $('btnAi').onclick = function () { requestTranslate('plugin'); };
     $('btnTranslateAll').onclick = function () { requestTranslate('all'); };
@@ -1166,6 +1258,7 @@
     S.sig = dataSignature();
     applyCompactMode();
     window.addEventListener('resize', applyCompactMode);
+    setTimeout(checkForUpdates, 1500);
     setInterval(poll, 1200);
   }
 

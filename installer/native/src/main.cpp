@@ -14,18 +14,21 @@
 #include <cmath>
 #include <iterator>
 #include <mutex>
+#include <regex>
 #include <sstream>
 #include <thread>
+#include <vector>
 
 using Microsoft::WRL::ComPtr;
 
 namespace
 {
 constexpr wchar_t kWindowClass[] = L"CEP.ZH.Installer.Window";
-constexpr wchar_t kWindowTitle[] = L"CEP 汉化管理器 · 安装器";
+constexpr wchar_t kWindowTitle[] = L"CEP 汉化管理器 · 安装器 v0.2.7";
 constexpr int kWidth = 760;
 constexpr int kHeight = 570;
 constexpr UINT kMsgUpdate = WM_APP + 1;
+constexpr UINT kMsgCheck = WM_APP + 2;
 
 constexpr float kPad = 32.0f;
 constexpr float kRight = 728.0f;
@@ -59,6 +62,13 @@ struct Palette
 struct UpdateFn
 {
     std::function<void(UiModel&)> fn;
+};
+
+struct CheckResult
+{
+    bool ok = false;
+    std::wstring latest;
+    std::wstring error;
 };
 
 Palette g_palette;
@@ -334,10 +344,12 @@ void DrawHeader()
 {
     Text(L"CEP 汉化管理器", g_fmtTitle.Get(), Rect(kPad, 16, 560, 46), g_palette.text);
     Text(L"DOWNLOADER / CEP-ZH", g_fmtSub.Get(), Rect(kPad, 49, 500, 66), g_palette.accent);
-    Text(L"v0.2.0", g_fmtSub.Get(), Rect(660, 18, kRight, 34), g_palette.muted);
+    Text(std::wstring(L"v") + kCepZhVersion, g_fmtSub.Get(), Rect(660, 18, kRight, 34), g_palette.muted);
     Line(kPad, 78.0f, kRight, 78.0f, g_palette.strong);
-    Text(L"SOURCE  github.com/Three-LEI/CEP-ZH  ·  main", g_fmtMono.Get(),
-        Rect(kPad, 88, kRight, 102), g_palette.muted);
+    Text(std::wstring(L"INSTALLED  ") +
+        (g_model.installed ? L"v" + g_model.installedVersion : L"no") +
+        L"  ·  LATEST  " + (g_model.latestVersion.empty() ? L"checking" : L"v" + g_model.latestVersion),
+        g_fmtMono.Get(), Rect(kPad, 88, kRight, 102), g_palette.muted);
 }
 
 void DrawCard(float top, const wchar_t* number, const wchar_t* title, const wchar_t* desc,
@@ -414,8 +426,102 @@ void DrawFooter()
     Line(kPad, 548, kRight, 548, g_palette.line);
     Text(IsAdmin() ? L"ADMIN / ELEVATED" : L"USER / NOT ELEVATED", g_fmtSub.Get(),
         Rect(kPad, 552, 260, 566), IsAdmin() ? g_palette.success : g_palette.error);
-    Text(L"three-lei × deepseek", g_fmtMono.Get(), Rect(280, 552, 520, 566), g_palette.muted);
+    Text(std::wstring(L"v") + kCepZhVersion + L" · three-lei × deepseek", g_fmtMono.Get(),
+        Rect(280, 552, 560, 566), g_palette.muted);
     Text(L"MIT", g_fmtMono.Get(), Rect(650, 552, kRight, 566), g_palette.faint);
+}
+
+bool IsCepZhInstalled(std::wstring& version)
+{
+    version.clear();
+    const std::wstring roaming = KnownFolder(FOLDERID_RoamingAppData);
+    const std::wstring local = KnownFolder(FOLDERID_LocalAppData);
+    const std::wstring manager = JoinPath(JoinPath(JoinPath(roaming, L"Adobe"), L"CEP"),
+        L"extensions\\cep.zh.manager\\index.html");
+    const std::wstring agent = JoinPath(JoinPath(JoinPath(local, L"CEP-ZH"), L"agent"),
+        L"tools\\cep-zh\\agent.mjs");
+    if (!FileExists(manager) || !FileExists(agent)) return false;
+
+    const std::wstring versionFile = JoinPath(JoinPath(local, L"CEP-ZH"), L"version.json");
+    std::wstring text;
+    if (ReadTextFile(versionFile, text)) {
+        std::wsmatch match;
+        if (std::regex_search(text, match, std::wregex(L"\"version\"\\s*:\\s*\"v?([0-9.]+)\""))
+            && match.size() > 1) {
+            version = match[1].str();
+        }
+    }
+    if (version.empty()) {
+        if (ReadTextFile(manager, text)) {
+            std::wsmatch match;
+            if (std::regex_search(text, match, std::wregex(L"v([0-9]+\\.[0-9]+\\.[0-9]+)"))
+                && match.size() > 1) {
+                version = match[1].str();
+            }
+        }
+    }
+    if (version.empty()) version = L"unknown";
+    return true;
+}
+
+bool IsNewerVersion(const std::wstring& latest, const std::wstring& current)
+{
+    auto parts = [](const std::wstring& value) {
+        std::vector<int> out;
+        std::wstringstream stream(value);
+        std::wstring part;
+        while (std::getline(stream, part, L'.')) {
+            try { out.push_back(std::stoi(part)); } catch (...) { out.push_back(0); }
+        }
+        return out;
+    };
+    const auto a = parts(latest);
+    const auto b = parts(current);
+    for (size_t i = 0; i < std::max(a.size(), b.size()); ++i) {
+        const int x = i < a.size() ? a[i] : 0;
+        const int y = i < b.size() ? b[i] : 0;
+        if (x != y) return x > y;
+    }
+    return false;
+}
+
+void RefreshInstalledState()
+{
+    std::wstring version;
+    g_model.installed = IsCepZhInstalled(version);
+    g_model.installedVersion = version;
+    g_model.checking = false;
+    g_model.updateAvailable = false;
+    g_model.upToDate = false;
+    g_model.checkFailed = false;
+    if (g_model.installed) {
+        g_model.status = version == L"unknown"
+            ? L"已安装 CEP-ZH，正在检查更新…"
+            : L"已安装 v" + version + L"，正在检查更新…";
+    } else {
+        g_model.latestVersion = kCepZhVersion;
+        g_model.status = L"尚未安装，可以开始安装 v" + std::wstring(kCepZhVersion);
+    }
+}
+
+std::wstring InstallActionLabel()
+{
+    if (g_model.busy) return g_operation == 1 ? L"卸载中…" : L"安装中…";
+    if (!g_model.installed) return L"开始安装 v" + std::wstring(kCepZhVersion);
+    if (g_model.checking) return L"正在检查更新…";
+    if (g_model.checkFailed) return L"检查更新失败 · 重试";
+    if (g_model.updateAvailable) return L"立即更新 v" + g_model.latestVersion;
+    if (g_model.upToDate) return L"已是最新 v" + g_model.installedVersion;
+    return L"正在检查更新…";
+}
+
+bool InstallActionEnabled()
+{
+    if (g_model.busy) return false;
+    if (!g_model.installed) return true;
+    if (g_model.checking) return false;
+    if (g_model.checkFailed) return true;
+    return g_model.updateAvailable;
 }
 
 void Paint()
@@ -435,9 +541,7 @@ void Paint()
     DrawLog();
 
     DrawButton(0, Rect(kPad, kButtonY, 192, kButtonY + kButtonH),
-        busy ? (g_operation == 1 ? L"卸载中…" : L"安装中…")
-             : (g_model.done ? (g_operation == 1 ? L"再次卸载" : L"重新安装") : L"开始安装"),
-        true, !busy);
+        InstallActionLabel().c_str(), true, InstallActionEnabled());
     DrawButton(1, Rect(204, kButtonY, 340, kButtonY + kButtonH), L"打开扩展目录", false, true);
     DrawButton(2, Rect(352, kButtonY, 462, kButtonY + kButtonH), L"打开日志", false, true);
     DrawButton(4, Rect(480, kButtonY, 600, kButtonY + kButtonH), L"卸载", false, !busy);
@@ -454,13 +558,37 @@ void PublishFromWorker(HWND hwnd, const std::function<void(UiModel&)>& fn)
         delete update;
 }
 
+void StartUpdateCheck(HWND hwnd)
+{
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        g_model.checking = true;
+        g_model.checkFailed = false;
+        g_model.latestVersion.clear();
+        g_model.status = L"正在检查 GitHub Release…";
+    }
+    InvalidateRect(hwnd, nullptr, FALSE);
+    std::thread([hwnd]() {
+        auto* result = new CheckResult{};
+        result->ok = FetchLatestRelease(result->latest, result->error);
+        if (!PostMessageW(hwnd, kMsgCheck, 0, reinterpret_cast<LPARAM>(result)))
+            delete result;
+    }).detach();
+}
+
 void StartInstall(HWND hwnd)
 {
     if (g_busy) return;
     g_operation = 0;
     {
         std::lock_guard<std::mutex> lock(g_mutex);
+        const bool installed = g_model.installed;
+        const std::wstring installedVersion = g_model.installedVersion;
+        const std::wstring latestVersion = g_model.latestVersion;
         g_model = UiModel{};
+        g_model.installed = installed;
+        g_model.installedVersion = installedVersion;
+        g_model.latestVersion = latestVersion;
         g_model.busy = true;
         g_model.status = L"准备下载…";
         g_model.step1 = L"等待";
@@ -630,11 +758,52 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         const int x = GET_X_LPARAM(lParam);
         const int y = GET_Y_LPARAM(lParam);
         if (y >= Scale(static_cast<int>(kButtonY)) && y <= Scale(static_cast<int>(kButtonY + kButtonH))) {
-            if (x >= Scale(32) && x <= Scale(192)) { StartInstall(hwnd); return 0; }
+            if (x >= Scale(32) && x <= Scale(192)) {
+                if (!InstallActionEnabled()) return 0;
+                if (g_model.installed && g_model.checkFailed && !g_model.updateAvailable) {
+                    StartUpdateCheck(hwnd);
+                } else {
+                    StartInstall(hwnd);
+                }
+                return 0;
+            }
             if (x >= Scale(204) && x <= Scale(340)) { OpenExtensionDir(); return 0; }
             if (x >= Scale(352) && x <= Scale(462)) { OpenLog(); return 0; }
             if (x >= Scale(480) && x <= Scale(600)) { StartUninstall(hwnd); return 0; }
             if (x >= Scale(632) && x <= Scale(728)) { DestroyWindow(hwnd); return 0; }
+        }
+        return 0;
+    }
+    case kMsgCheck:
+    {
+        auto* result = reinterpret_cast<CheckResult*>(lParam);
+        if (result) {
+            {
+                std::lock_guard<std::mutex> lock(g_mutex);
+                g_model.checking = false;
+                if (!result->ok) {
+                    g_model.checkFailed = true;
+                    g_model.updateAvailable = false;
+                    g_model.upToDate = false;
+                    g_model.status = L"检查更新失败：" + result->error;
+                } else {
+                    g_model.latestVersion = result->latest;
+                    g_model.checkFailed = false;
+                    if (!g_model.installed) {
+                        g_model.updateAvailable = false;
+                        g_model.upToDate = false;
+                        g_model.status = L"尚未安装，可以开始安装 v" + std::wstring(kCepZhVersion);
+                    } else {
+                        g_model.updateAvailable = IsNewerVersion(result->latest, g_model.installedVersion);
+                        g_model.upToDate = !g_model.updateAvailable;
+                        g_model.status = g_model.updateAvailable
+                            ? L"发现新版本 v" + result->latest + L"，可立即更新"
+                            : L"已安装 v" + g_model.installedVersion + L"，已是最新版本";
+                    }
+                }
+            }
+            delete result;
+            InvalidateRect(hwnd, nullptr, FALSE);
         }
         return 0;
     }
@@ -644,9 +813,48 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (update) {
             {
                 std::lock_guard<std::mutex> lock(g_mutex);
+                const bool installed = g_model.installed;
+                const bool checking = g_model.checking;
+                const bool updateAvailable = g_model.updateAvailable;
+                const bool upToDate = g_model.upToDate;
+                const bool checkFailed = g_model.checkFailed;
+                const std::wstring installedVersion = g_model.installedVersion;
+                const std::wstring latestVersion = g_model.latestVersion;
+                const int operation = g_operation;
                 update->fn(g_model);
+                g_model.installed = installed;
+                g_model.checking = checking;
+                g_model.updateAvailable = updateAvailable;
+                g_model.upToDate = upToDate;
+                g_model.checkFailed = checkFailed;
+                g_model.installedVersion = installedVersion;
+                g_model.latestVersion = latestVersion;
+                if (!g_model.busy && g_model.done) {
+                    if (operation == 0) {
+                        g_model.installed = true;
+                        g_model.installedVersion = kCepZhVersion;
+                        g_model.latestVersion = kCepZhVersion;
+                        g_model.updateAvailable = false;
+                        g_model.upToDate = true;
+                        g_model.checking = false;
+                        g_model.checkFailed = false;
+                    } else if (operation == 1) {
+                        g_model.installed = false;
+                        g_model.installedVersion.clear();
+                        g_model.latestVersion.clear();
+                        g_model.updateAvailable = false;
+                        g_model.upToDate = false;
+                        g_model.checking = false;
+                        g_model.checkFailed = false;
+                    }
+                } else if (!g_model.busy && operation == 0 && g_model.failed) {
+                    // A failed update must leave the update button usable.
+                    g_model.updateAvailable = g_model.installed;
+                    g_model.upToDate = false;
+                    g_model.checkFailed = false;
+                }
                 g_busy = g_model.busy;
-                if (!g_model.busy && g_operation == 1) g_operation = 0;
+                if (!g_model.busy && operation == 1) g_operation = 0;
             }
             delete update;
             InvalidateRect(hwnd, nullptr, FALSE);
@@ -711,6 +919,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
         g_model.step2 = L"等待";
         g_model.log.push_back(L"下载源：github.com/Three-LEI/CEP-ZH");
         g_model.log.push_back(IsAdmin() ? L"管理员权限：已获取" : L"管理员权限：未获取");
+    }
+    if (!preview) {
+        {
+            std::lock_guard<std::mutex> lock(g_mutex);
+            RefreshInstalledState();
+            InvalidateRect(hwnd, nullptr, FALSE);
+        }
+        if (g_model.installed) StartUpdateCheck(hwnd);
     }
 
     ShowWindow(hwnd, show);

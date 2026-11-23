@@ -49,16 +49,16 @@ const wchar_t* kNodeLabels[] = { L"npmmirror", L"清华镜像", L"阿里云镜�
 constexpr wchar_t kNodeSha256[] = L"55b639295920b219bb2acbcfa00f90393a2789095b7323f79475c9f34795f217";
 constexpr wchar_t kHosts[] = L"AEFT,PHXS,PPRO,ILST,IDSN,FLPR,AUDT,DRWV";
 const wchar_t* kRepoUrls[] = {
-    L"https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.6/CEP-ZH-runtime-v0.2.6.zip",
-    L"https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.6/CEP-ZH-runtime-v0.2.6.zip",
-    L"https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.6/CEP-ZH-runtime-v0.2.6.zip",
-    L"https://ghproxy.imciel.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.6/CEP-ZH-runtime-v0.2.6.zip",
-    L"https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.6/CEP-ZH-runtime-v0.2.6.zip",
+    L"https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.7/CEP-ZH-runtime-v0.2.7.zip",
+    L"https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.7/CEP-ZH-runtime-v0.2.7.zip",
+    L"https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.7/CEP-ZH-runtime-v0.2.7.zip",
+    L"https://ghproxy.imciel.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.7/CEP-ZH-runtime-v0.2.7.zip",
+    L"https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.7/CEP-ZH-runtime-v0.2.7.zip",
 };
 const wchar_t* kRepoLabels[] = {
     L"ghfast.top", L"gh-proxy.com", L"ghproxy.net", L"ghproxy.imciel.com", L"GitHub 直连",
 };
-constexpr wchar_t kSourceSha256[] = L"546c6eaf6736722dbff32f212821c8b9e8a629b9c226b2958fd164b92c783e05";
+constexpr wchar_t kSourceSha256[] = L"6a1857a9052eabd0c63bf5807ce253ef989bbf7aafa9f55704febdbe2c6b6a19";
 
 bool ParseHttpUrl(const std::wstring& url, std::wstring& host, std::wstring& path, INTERNET_PORT& port, bool& secure)
 {
@@ -177,6 +177,8 @@ bool HttpDownload(const std::wstring& url, const std::wstring& outPath,
 
     DWORD redirectPolicy = WINHTTP_OPTION_REDIRECT_POLICY_ALWAYS;
     WinHttpSetOption(request, WINHTTP_OPTION_REDIRECT_POLICY, &redirectPolicy, sizeof(redirectPolicy));
+    WinHttpAddRequestHeaders(request, L"User-Agent: CEP-ZH-Installer", -1, WINHTTP_ADDREQ_FLAG_ADD);
+    WinHttpAddRequestHeaders(request, L"Accept: application/vnd.github+json", -1, WINHTTP_ADDREQ_FLAG_ADD);
 
     if (secure) {
         DWORD protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_1 |
@@ -248,6 +250,31 @@ bool HttpDownload(const std::wstring& url, const std::wstring& outPath,
         DeleteFileW(outPath.c_str());
         return false;
     }
+    return true;
+}
+
+bool FetchLatestReleaseImpl(std::wstring& version, std::wstring& error)
+{
+    const std::wstring file = JoinPath(TempDirectory(), L"CEP-ZH-latest-release.json");
+    DeleteFileW(file.c_str());
+    if (!HttpDownload(L"https://api.github.com/repos/Three-LEI/CEP-ZH/releases/latest", file,
+            nullptr, error)) {
+        return false;
+    }
+    std::wstring text;
+    const bool read = ReadTextFile(file, text);
+    DeleteFileW(file.c_str());
+    if (!read) {
+        error = L"无法读取 Release 信息";
+        return false;
+    }
+    std::wsmatch match;
+    const std::wregex pattern(L"\"tag_name\"\\s*:\\s*\"v?([0-9]+(?:\\.[0-9]+)*)\"");
+    if (!std::regex_search(text, match, pattern) || match.size() < 2) {
+        error = L"Release 中没有版本号";
+        return false;
+    }
+    version = match[1].str();
     return true;
 }
 
@@ -641,6 +668,11 @@ bool InstallShortcutForSelf(std::deque<std::wstring>& log, std::wstring& error)
 }
 } // namespace
 
+bool FetchLatestRelease(std::wstring& version, std::wstring& error)
+{
+    return FetchLatestReleaseImpl(version, error);
+}
+
 bool RunInstaller(const UiPublish& publish)
 {
     std::wstring step1 = L"等待";
@@ -886,6 +918,12 @@ bool RunInstaller(const UiPublish& publish)
     if (!InstallShortcutForSelf(logs, error)) {
         log(L"警告：桌面快捷方式创建失败：" + error);
     }
+    const std::wstring versionFile = JoinPath(
+        JoinPath(KnownFolder(FOLDERID_LocalAppData), L"CEP-ZH"), L"version.json");
+    WriteTextFile(versionFile,
+        L"{\r\n  \"version\": \"" + std::wstring(kCepZhVersion) + L"\",\r\n  \"installedAt\": \"" +
+        std::to_wstring(static_cast<long long>(std::chrono::system_clock::to_time_t(
+            std::chrono::system_clock::now()))) + L"\"\r\n}\r\n");
     apply();
 
     Trace(L"CLEANUP_BEGIN");
@@ -968,6 +1006,7 @@ bool RunUninstall(const UiPublish& publish)
     if (!RemoveTree(agentRoot)) log(L"警告：Agent 目录未完全删除");
     RemoveTree(JoinPath(local, L"CEP-ZH\\node"));
     RemoveTree(JoinPath(local, L"CEP-ZH\\font-cache"));
+    DeleteFileW(JoinPath(JoinPath(local, L"CEP-ZH"), L"version.json").c_str());
 
     const std::wstring shortcut = ShortcutPath();
     DeleteFileW(shortcut.c_str());
