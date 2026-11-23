@@ -441,15 +441,7 @@
   }
 
   function openInstallerUpdate() {
-    if (!canOpenNow()) return;
-    var local = localDataPath() + '/CEP-ZH/CepZhInstaller.exe';
-    if (pathExists(local)) {
-      openViaJsx('run', local, false, function () {
-        openUrlSafe(RELEASES_URL, true);
-      });
-      return;
-    }
-    openUrlSafe(RELEASES_URL, true);
+    openUrlSafe(RELEASES_URL);
   }
 
   function fallbackCopy(text) {

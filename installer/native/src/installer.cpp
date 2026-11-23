@@ -49,16 +49,16 @@ const wchar_t* kNodeLabels[] = { L"npmmirror", L"清华镜像", L"阿里云镜�
 constexpr wchar_t kNodeSha256[] = L"55b639295920b219bb2acbcfa00f90393a2789095b7323f79475c9f34795f217";
 constexpr wchar_t kHosts[] = L"AEFT,PHXS,PPRO,ILST,IDSN,FLPR,AUDT,DRWV";
 const wchar_t* kRepoUrls[] = {
-    L"https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.3.1/CEP-ZH-runtime-v0.3.1.zip",
-    L"https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.3.1/CEP-ZH-runtime-v0.3.1.zip",
-    L"https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.3.1/CEP-ZH-runtime-v0.3.1.zip",
-    L"https://ghproxy.imciel.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.3.1/CEP-ZH-runtime-v0.3.1.zip",
-    L"https://github.com/Three-LEI/CEP-ZH/releases/download/v0.3.1/CEP-ZH-runtime-v0.3.1.zip",
+    L"https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.3.2/CEP-ZH-runtime-v0.3.2.zip",
+    L"https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.3.2/CEP-ZH-runtime-v0.3.2.zip",
+    L"https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.3.2/CEP-ZH-runtime-v0.3.2.zip",
+    L"https://ghproxy.imciel.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.3.2/CEP-ZH-runtime-v0.3.2.zip",
+    L"https://github.com/Three-LEI/CEP-ZH/releases/download/v0.3.2/CEP-ZH-runtime-v0.3.2.zip",
 };
 const wchar_t* kRepoLabels[] = {
     L"ghfast.top", L"gh-proxy.com", L"ghproxy.net", L"ghproxy.imciel.com", L"GitHub 直连",
 };
-constexpr wchar_t kSourceSha256[] = L"aa30942a7348c8f57a30f86e6710500d47352586026c9d27e2876d2adfe230af";
+constexpr wchar_t kSourceSha256[] = L"3d98a6eab13755e7976ed794c9766203d22f75fe5d467e9b1990d9f6bd2388ed";
 
 bool ParseHttpUrl(const std::wstring& url, std::wstring& host, std::wstring& path, INTERNET_PORT& port, bool& secure)
 {
