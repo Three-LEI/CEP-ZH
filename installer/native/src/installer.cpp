@@ -49,16 +49,16 @@ const wchar_t* kNodeLabels[] = { L"npmmirror", L"清华镜像", L"阿里云镜�
 constexpr wchar_t kNodeSha256[] = L"55b639295920b219bb2acbcfa00f90393a2789095b7323f79475c9f34795f217";
 constexpr wchar_t kHosts[] = L"AEFT,PHXS,PPRO,ILST,IDSN,FLPR,AUDT,DRWV";
 const wchar_t* kRepoUrls[] = {
-    L"https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.11/CEP-ZH-runtime-v0.2.11.zip",
-    L"https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.11/CEP-ZH-runtime-v0.2.11.zip",
-    L"https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.11/CEP-ZH-runtime-v0.2.11.zip",
-    L"https://ghproxy.imciel.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.11/CEP-ZH-runtime-v0.2.11.zip",
-    L"https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.11/CEP-ZH-runtime-v0.2.11.zip",
+    L"https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.3.0/CEP-ZH-runtime-v0.3.0.zip",
+    L"https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.3.0/CEP-ZH-runtime-v0.3.0.zip",
+    L"https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.3.0/CEP-ZH-runtime-v0.3.0.zip",
+    L"https://ghproxy.imciel.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.3.0/CEP-ZH-runtime-v0.3.0.zip",
+    L"https://github.com/Three-LEI/CEP-ZH/releases/download/v0.3.0/CEP-ZH-runtime-v0.3.0.zip",
 };
 const wchar_t* kRepoLabels[] = {
     L"ghfast.top", L"gh-proxy.com", L"ghproxy.net", L"ghproxy.imciel.com", L"GitHub 直连",
 };
-constexpr wchar_t kSourceSha256[] = L"aeabd9e03a65546a82ee15862860a8e3b4823f4e773fa7ffc4f03033becdcafe";
+constexpr wchar_t kSourceSha256[] = L"b12010fd8e04f9e44865938849597b9aa214f1063b16a0f10bf3cb96ad39a29f";
 
 bool ParseHttpUrl(const std::wstring& url, std::wstring& host, std::wstring& path, INTERNET_PORT& port, bool& secure)
 {
@@ -666,6 +666,29 @@ bool InstallShortcutForSelf(std::deque<std::wstring>& log, std::wstring& error)
     log.push_back(L"桌面快捷方式：" + ShortcutPath());
     return true;
 }
+int ClearCepUiCaches(std::deque<std::wstring>& logs)
+{
+    const std::wstring root = JoinPath(
+        JoinPath(KnownFolder(FOLDERID_LocalAppData), L"Temp"), L"cep_cache");
+    if (!DirectoryExists(root)) return 0;
+    int matched = 0;
+    std::error_code ec;
+    for (fs::directory_iterator it(root, ec), end; it != end && !ec; it.increment(ec)) {
+        if (ec || !it->is_directory()) continue;
+        const std::wstring name = it->path().filename().wstring();
+        if (name.find(L"_cep.zh.manager") == std::wstring::npos &&
+            name.find(L"_cep.zh.agent") == std::wstring::npos) continue;
+        ++matched;
+        for (const wchar_t* sub : { L"Code Cache", L"Cache", L"GPUCache", L"ScriptCache" }) {
+            RemoveTree(JoinPath(it->path().wstring(), sub));
+        }
+    }
+    if (matched) {
+        logs.push_back(L"已清理 " + std::to_wstring(matched) + L" 个 CEP 版本的界面缓存");
+    }
+    return matched;
+}
+
 } // namespace
 
 bool FetchLatestRelease(std::wstring& version, std::wstring& error)
@@ -718,6 +741,9 @@ bool RunInstaller(const UiPublish& publish)
 
     Trace(L"BEGIN");
     apply();
+    if (AdobeAppRunning()) {
+        return fail(L"请先关闭所有 Adobe 应用后再安装/更新");
+    }
 
     const std::wstring tempRoot = JoinPath(TempDirectory(),
         L"CEP-ZH-installer-" + std::to_wstring(GetCurrentProcessId()) + L"-" +
@@ -842,6 +868,8 @@ bool RunInstaller(const UiPublish& publish)
     apply();
     if (!InstallFiles(repoRoot, node, error)) return fail(error);
     Trace(L"INSTALLED");
+    ClearCepUiCaches(logs);
+    apply();
 
     step1 = L"安装 CEP12 引擎代理";
     status = L"为 CEP12 引擎安装全局调试代理（新插件自动生效）…";

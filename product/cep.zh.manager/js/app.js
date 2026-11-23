@@ -21,7 +21,10 @@
   var CONFIG = BASE + '/config.json';
   var GITHUB_URL = 'https://github.com/Three-LEI/CEP-ZH';
   var BILI_URL = 'https://space.bilibili.com/353544977';
-  var APP_VERSION = '0.2.7';
+  var APP_VERSION = (function () {
+    var el = document.querySelector('.version');
+    return (el && el.textContent ? el.textContent : '0.3.0').replace(/^v/i, '').trim();
+  })();
   var RELEASES_URL = GITHUB_URL + '/releases/latest';
   var LATEST_RELEASE_API = 'https://api.github.com/repos/Three-LEI/CEP-ZH/releases/latest';
   var UPDATE_DISMISS_KEY = 'cepzh.update.dismissed';
@@ -362,6 +365,7 @@
     }
     if (temp) {
       items.push(
+        { group: '缓存', label: 'CEP 各版本代码缓存', path: temp + '/cep_cache', kind: 'dir', desc: '每个 Adobe 版本独立：*_cep.zh.manager.panel / *_cep.zh.agent' },
         { group: '日志 / 临时', label: '安装日志', path: temp + '/CEP-ZH-installer.log', kind: 'file', desc: '安装、下载与 .debug 初始化日志' },
         { group: '日志 / 临时', label: '安装临时目录', path: temp, kind: 'dir', desc: 'CEP-ZH-installer-* 下载/解压目录，正常会自动清理' },
         { group: '日志 / 临时', label: '提权任务目录', path: temp + '/CEP-ZH', kind: 'dir', desc: '修复工具 job/result 临时文件' }
@@ -383,20 +387,61 @@
     return items.filter(function (item) { return item.path; });
   }
 
+  var lastOpenAt = 0;
+
+  function canOpenNow() {
+    var now = Date.now();
+    if (now - lastOpenAt < 700) return false;
+    lastOpenAt = now;
+    return true;
+  }
+
+  function nodeRequire() {
+    try { if (typeof require === 'function') return require; } catch (e) {}
+    try { if (window.require) return window.require; } catch (e) {}
+    return null;
+  }
+
+  function runDetached(exe, args) {
+    var req = nodeRequire();
+    if (!req) return false;
+    try {
+      req('child_process').execFile(exe, args, { windowsHide: true }, function () {});
+      return true;
+    } catch (e) { return false; }
+  }
+
   function explorerOpen(path, isFile) {
+    if (!canOpenNow()) return;
     var win = String(path).replace(/\//g, '\\');
     var exists = pathExists(path);
     var parent = win.replace(/\\[^\\]+$/, '');
-    try {
-      var req = (typeof require === 'function') ? require : window.require;
-      if (req) {
-        var cp = req('child_process');
-        if (isFile && exists) cp.execFile('explorer.exe', ['/select,', win], { windowsHide: true });
-        else cp.execFile('explorer.exe', [exists ? win : parent], { windowsHide: true });
-        return;
-      }
-    } catch (e) {}
-    openExternal('file:///' + (exists ? win : parent).replace(/\\/g, '/'));
+    if (isFile && exists) {
+      if (runDetached('explorer.exe', ['/select,', win])) return;
+    } else {
+      if (runDetached('explorer.exe', [exists ? win : parent])) return;
+    }
+    copyPath(path);
+    toast('当前 CEP 无法安全打开，路径已复制');
+  }
+
+  function openUrlSafe(url) {
+    if (!canOpenNow()) return;
+    if (runDetached('cmd.exe', ['/c', 'start', '', url])) return;
+    copyPath(url);
+    toast('无法打开浏览器，链接已复制');
+  }
+
+  function openInstallerUpdate() {
+    if (!canOpenNow()) return;
+    var local = localDataPath() + '/CEP-ZH/CepZhInstaller.exe';
+    if (pathExists(local)) {
+      var win = local.replace(/\//g, '\\');
+      if (runDetached('cmd.exe', ['/c', 'start', '', win])) return;
+    }
+    if (runDetached('cmd.exe', ['/c', 'start', '', RELEASES_URL])) return;
+    copyPath(RELEASES_URL);
+    toast('无法打开安装器，发布页链接已复制');
   }
 
   function fallbackCopy(text) {
@@ -1105,16 +1150,6 @@
     if (S.view === 'settings') renderSettings();
   }
 
-  function openExternal(url) {
-    try {
-      if (window.cep && window.cep.util && window.cep.util.openURLInDefaultBrowser) {
-        window.cep.util.openURLInDefaultBrowser(url);
-        return;
-      }
-    } catch (e) {}
-    try { window.open(url, '_blank'); } catch (e) {}
-  }
-
   function parseVersion(v) {
     return String(v || '').replace(/^v/i, '').split(/[.\-+]/).map(function (x) {
       var n = parseInt(x, 10);
@@ -1262,7 +1297,7 @@
     };
     if ($('btnRepairAllDebug')) $('btnRepairAllDebug').onclick = requestDebugRepair;
     if ($('btnUpdate')) {
-      $('btnUpdate').onclick = function () { openExternal(RELEASES_URL); };
+      $('btnUpdate').onclick = openInstallerUpdate;
     }
     if ($('btnUpdateDismiss')) {
       $('btnUpdateDismiss').onclick = function () {
@@ -1272,6 +1307,18 @@
       };
     }
     if ($('btnRefreshPaths')) $('btnRefreshPaths').onclick = renderStoragePaths;
+    if ($('githubLink')) {
+      $('githubLink').onclick = function (e) {
+        e.preventDefault();
+        openUrlSafe(GITHUB_URL);
+      };
+    }
+    if ($('biliLink')) {
+      $('biliLink').onclick = function (e) {
+        e.preventDefault();
+        openUrlSafe(BILI_URL);
+      };
+    }
     $('pluginToggle').onchange = function () {
       if (!S.key) return;
       var disabled = S.control.disabledPlugins.slice();
