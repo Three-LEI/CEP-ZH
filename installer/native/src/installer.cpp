@@ -170,6 +170,7 @@ bool ShouldExtract(const std::string& name)
 {
     return name.find("/product/cep.zh.manager/") != std::string::npos ||
            name.find("/tools/cep-zh/") != std::string::npos ||
+           name.find("/tools/elevate/dist/") != std::string::npos ||
            name.find("/tools/bootstrap/dist/VCRUNTIME140_1.dll") != std::string::npos;
 }
 
@@ -286,8 +287,13 @@ bool InstallFiles(const std::wstring& repoRoot, const std::wstring& nodePath, st
 {
     const std::wstring sourceExt = JoinPath(JoinPath(repoRoot, L"product"), L"cep.zh.manager");
     const std::wstring sourceAgent = JoinPath(JoinPath(repoRoot, L"tools"), L"cep-zh");
+    const std::wstring sourceElevate = JoinPath(JoinPath(JoinPath(repoRoot, L"tools"), L"elevate\\dist"), L"cepzh-elevate.exe");
     if (!DirectoryExists(sourceExt) || !DirectoryExists(sourceAgent)) {
         error = L"下载包内容不完整";
+        return false;
+    }
+    if (!FileExists(sourceElevate)) {
+        error = L"下载包缺少 CEP汉化修复工具.exe";
         return false;
     }
 
@@ -322,6 +328,14 @@ bool InstallFiles(const std::wstring& repoRoot, const std::wstring& nodePath, st
     if (!RemoveTree(agentTools) && DirectoryExists(agentTools)) { error = L"无法更新 Agent 目录"; return false; }
     if (!EnsureDirectory(agentTools)) { error = L"无法创建 Agent 目录"; return false; }
     if (!CopyTree(sourceAgent, agentTools)) { error = L"复制 Agent 失败"; return false; }
+
+    const std::wstring elevateBin = JoinPath(agentRoot, L"bin");
+    if (!EnsureDirectory(elevateBin)) { error = L"无法创建提权工具目录"; return false; }
+    const std::wstring elevateTarget = JoinPath(elevateBin, L"CEP汉化修复工具.exe");
+    if (!CopyFileW(sourceElevate.c_str(), elevateTarget.c_str(), FALSE)) {
+        error = L"复制 CEP汉化修复工具.exe 失败";
+        return false;
+    }
 
     if (!EnsureDirectory(configDir)) { error = L"无法创建配置目录"; return false; }
     if (!PatchConfig(configPath, nodePath, agentScript, error)) return false;

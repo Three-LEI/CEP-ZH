@@ -13,6 +13,7 @@ test/*.json
 
 # Local toolchain/build caches
 node_modules/
+tools/elevate/build/
 tools/bootstrap/tcc/
 tools/cep-zh/state.json
 installer/native/build/

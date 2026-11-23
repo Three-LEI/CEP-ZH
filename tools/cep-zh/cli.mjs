@@ -24,7 +24,7 @@ import {
   STATE_PATH, DEFAULT_START_PORT,
 } from './lib/ports.mjs';
 import {
-  readDebugFile, mergeDebugEntries, writeDebugFile, debugPathFor, hashText, restoreDebugFile,
+  readDebugFile, mergeDebugEntries, writeDebugFile, debugPathFor, hashText, restoreDebugFile, serializeDebug,
 } from './lib/debugfile.mjs';
 import { canWriteDir } from './lib/net.mjs';
 import { discoverLivePanels, buildPortIndex, resolveLiveTarget } from './lib/live.mjs';
@@ -35,6 +35,20 @@ import { writeDebugBaseline } from './lib/baseline.mjs';
 const TOOL_DIR = path.dirname(fileURLToPath(import.meta.url));
 const CATALOG_DIR = path.join(TOOL_DIR, 'catalog');
 const AGENT_PATH = path.join(TOOL_DIR, 'agent.mjs');
+const ELEVATE_NAME = 'CEP汉化修复工具.exe';
+const ELEVATE_ASCII = 'cepzh-elevate.exe';
+
+function findElevateHelper() {
+  const candidates = [
+    path.join(process.env.LOCALAPPDATA || '', 'CEP-ZH', 'agent', 'bin', ELEVATE_NAME),
+    path.join(process.env.LOCALAPPDATA || '', 'CEP-ZH', 'agent', 'bin', ELEVATE_ASCII),
+    path.join(TOOL_DIR, '..', 'elevate', 'dist', ELEVATE_NAME),
+    path.join(TOOL_DIR, '..', 'elevate', 'dist', ELEVATE_ASCII),
+    path.join(TOOL_DIR, '..', '..', 'tools', 'elevate', 'dist', ELEVATE_NAME),
+    path.join(TOOL_DIR, '..', '..', 'tools', 'elevate', 'dist', ELEVATE_ASCII),
+  ];
+  return candidates.find((p) => p && fs.existsSync(p)) || '';
+}
 
 const splitList = (v) => (v ? String(v).split(',').map((s) => s.trim()).filter(Boolean) : []);
 
@@ -152,6 +166,7 @@ async function cmdEnable(argv) {
   const unchanged = [];
   const skipped = [];
   const failed = [];
+  const elevatedTargets = [];
 
   for (const { bundle, additions } of groups) {
     const existing = readDebugFile(bundle.basePath);
@@ -162,7 +177,11 @@ async function cmdEnable(argv) {
       continue;
     }
     if (!canWriteDir(bundle.basePath)) {
-      skipped.push({ bundle, additions, reason: 'read-only' });
+      if (values.elevate && process.platform === 'win32' && !values['dry-run']) {
+        elevatedTargets.push({ bundle, additions, debugPath, entries: merged.entries });
+      } else {
+        skipped.push({ bundle, additions, reason: 'read-only' });
+      }
       continue;
     }
     if (values['dry-run']) {
@@ -186,6 +205,72 @@ async function cmdEnable(argv) {
       written.push({ bundle, additions, res });
     } catch (err) {
       failed.push({ bundle, error: err.message });
+    }
+  }
+
+  if (elevatedTargets.length) {
+    const helper = findElevateHelper();
+    if (!helper) {
+      for (const t of elevatedTargets) failed.push({ bundle: t.bundle, error: `未找到 ${ELEVATE_NAME}` });
+    } else {
+      const stageBase = path.join(os.tmpdir(), 'CEP-ZH');
+      fs.mkdirSync(stageBase, { recursive: true });
+      const jobDir = fs.mkdtempSync(path.join(stageBase, 'elevate-'));
+      const jobPath = path.join(jobDir, 'job.txt');
+      const resultPath = path.join(jobDir, 'result.txt');
+      const items = [];
+      const jobLines = ['CEPZH-ELEVATE 1'];
+      try {
+        elevatedTargets.forEach((t, i) => {
+          const source = path.join(jobDir, `stage-${i}.debug`);
+          fs.writeFileSync(source, serializeDebug(t.entries));
+          const backup = t.debugPath + '.cep-zh.bak';
+          jobLines.push([t.debugPath, source, backup].join('\t'));
+          items.push({ ...t, source, backup });
+        });
+        fs.writeFileSync(jobPath, jobLines.join('\n') + '\n');
+        const run = spawnSync(helper, ['--job', jobPath, '--result', resultPath], {
+          stdio: 'inherit', windowsHide: true,
+        });
+        const results = new Map();
+        try {
+          const lines = fs.readFileSync(resultPath, 'utf8').split(/\r?\n/);
+          for (const line of lines) {
+            const cols = line.split('\t');
+            if (cols.length >= 5 && cols[0]) {
+              results.set(cols[0].toLowerCase(), {
+                ok: cols[1] === '1', created: cols[2] === '1', backup: cols[3], error: cols[4],
+              });
+            }
+          }
+        } catch {}
+        for (const item of items) {
+          const r = results.get(item.debugPath.toLowerCase());
+          if (r && r.ok) {
+            let hash = '';
+            try { hash = hashText(fs.readFileSync(item.debugPath, 'utf8')); } catch {}
+            state.files = state.files || {};
+            state.files[item.debugPath] = {
+              basePath: item.bundle.basePath,
+              bundleId: item.bundle.bundleId,
+              backup: r.backup || item.backup,
+              created: r.created,
+              hash,
+              extensionIds: [...new Set(item.additions.map((a) => a.id))],
+              hosts: [...new Set(item.additions.flatMap((a) => Object.keys(a.hosts)))],
+              updatedAt: new Date().toISOString(),
+            };
+            written.push({ bundle: item.bundle, additions: item.additions, res: { backup: r.backup, created: r.created, hash } });
+          } else {
+            failed.push({
+              bundle: item.bundle,
+              error: (r && r.error) || `提权写入失败（exit ${run.status == null ? '?' : run.status}）`,
+            });
+          }
+        }
+      } finally {
+        try { fs.rmSync(jobDir, { recursive: true, force: true }); } catch {}
+      }
     }
   }
 
@@ -214,42 +299,7 @@ async function cmdEnable(argv) {
     console.log(`\nfailed: ${failed.length}`);
     for (const f of failed) console.log(`  ${f.bundle.basePath}: ${f.error}`);
   }
-  if (skipped.length) {
-    if (values.elevate && process.platform === 'win32') {
-      console.log('\nrequesting elevation...');
-      // Keep the long --only list out of the UAC command line. A temporary
-      // script also lets us capture the elevated process output and exit code.
-      const args = [process.argv[1], ...process.argv.slice(2).filter((a) => a !== '--elevate')];
-      const psq = (s) => "'" + String(s).replace(/'/g, "''") + "'";
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cepzh-elev-'));
-      const child = path.join(dir, 'run.ps1');
-      const launcher = path.join(dir, 'launch.ps1');
-      const log = path.join(dir, 'output.log');
-      const cmd = args.map(psq).join(' ');
-      const childText = [
-        `$ErrorActionPreference = 'Continue'`,
-        `& ${psq(process.execPath)} ${cmd} *> ${psq(log)}`,
-        `$code = $LASTEXITCODE`,
-        `"EXIT $code" | Add-Content ${psq(log)}`,
-        `exit $code`,
-      ].join('\r\n');
-      const launchText = [
-        `$p = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',${psq(child)}) -Verb RunAs -Wait -PassThru`,
-        `exit $p.ExitCode`,
-      ].join('\r\n');
-      fs.writeFileSync(child, childText);
-      fs.writeFileSync(launcher, launchText);
-      const elevated = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', launcher], { stdio: 'inherit' });
-      try {
-        if (fs.existsSync(log)) console.log(fs.readFileSync(log, 'utf8').trim());
-      } catch {}
-      try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-      return elevated.status == null ? 1 : elevated.status;
-    }
-    console.log('\nRun the same command from an elevated prompt (or add --elevate) to cover system-wide extensions.');
-    console.log('User-level extensions in %APPDATA%\\Adobe\\CEP\\extensions were enabled without admin.');
-    return 3;
-  }
+  if (skipped.length) return 3;
   return failed.length ? 4 : 0;
 }
 

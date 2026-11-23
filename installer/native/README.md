@@ -28,9 +28,10 @@ installer\native\dist\CepZhInstaller.exe
 1. 从 GitHub 下载最新源码（优先 `gh-proxy.com`，回退 `ghproxy.net` / 直连）
 2. 检测系统 Node；缺失时下载便携 Node 22
 3. 安装管理面板和 Agent
-4. CEP12 安装引擎代理；旧版写入 `.debug`
-5. 写入 `debug-baseline.json`，供以后识别新插件
-6. 创建桌面快捷方式
+4. 安装 `CEP汉化修复工具.exe`，用于无 PowerShell 的管理员 `.debug` 写入
+5. CEP12 安装引擎代理；旧版写入 `.debug`
+6. 写入 `debug-baseline.json`，供以后识别新插件
+7. 创建桌面快捷方式
 
 安装器申请管理员权限。要求关闭 Adobe 应用后再替换引擎文件。
 

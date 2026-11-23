@@ -767,7 +767,7 @@
     var token = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
     S.repairToken = token;
     S.repairToastToken = '';
-    saveControl({ repairDebugToken: token });
+    saveControl({ repairDebugToken: token, repairDebugRequestedAt: Date.now() });
     renderDebugNotice();
     toast('已请求修复全部缺失 .debug；如弹出 UAC 请选择“是”…', 4000);
     setTimeout(refreshAgent, 500);
@@ -875,7 +875,7 @@
           else toast(failed ? ('修复失败：' + (rep.message || '未知错误')) : '等待管理员写入超时，可重试', 5000);
         }
         S.repairToken = '';
-        saveControl({ repairDebugToken: '' });
+        saveControl({ repairDebugToken: '', repairDebugRequestedAt: 0 });
         setTimeout(refreshAgent, 400);
       }
     }

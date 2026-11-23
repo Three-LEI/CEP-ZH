@@ -49,6 +49,7 @@ if (!debugBaseline) debugBaseline = createDebugBaseline();
 let dicts = loadDictionaries();
 let portIndex = buildPortIndex(scan);
 let control = readControl();
+clearStaleRepairToken();
 const sessions = new Map(); // port -> session
 const autoCollected = new Set(); // bundleId|url
 let lastCollectToken = '';
@@ -78,6 +79,7 @@ function readControl() {
       disabledPlugins: Array.isArray(j.disabledPlugins) ? j.disabledPlugins.map(String) : [],
       collectToken: j.collectToken ? String(j.collectToken) : '',
       repairDebugToken: j.repairDebugToken ? String(j.repairDebugToken) : '',
+      repairDebugRequestedAt: Number(j.repairDebugRequestedAt) || 0,
       translationTask: t && t.token ? {
         token: String(t.token),
         scope: t.scope === 'all' ? 'all' : 'plugin',
@@ -85,7 +87,24 @@ function readControl() {
       } : null,
     };
   } catch {
-    return { enabled: true, disabledPlugins: [], collectToken: '', repairDebugToken: '', translationTask: null };
+    return { enabled: true, disabledPlugins: [], collectToken: '', repairDebugToken: '', repairDebugRequestedAt: 0, translationTask: null };
+  }
+}
+
+function clearStaleRepairToken() {
+  if (!control.repairDebugToken) return;
+  const at = Number(control.repairDebugRequestedAt) || 0;
+  if (at && Date.now() - at < 120000) return;
+  try {
+    const raw = JSON.parse(fs.readFileSync(CONTROL_PATH, 'utf8').replace(/^\uFEFF/, ''));
+    delete raw.repairDebugToken;
+    delete raw.repairDebugRequestedAt;
+    fs.writeFileSync(CONTROL_PATH, JSON.stringify(raw, null, 2));
+    control.repairDebugToken = '';
+    control.repairDebugRequestedAt = 0;
+    log('[control] cleared stale repair token');
+  } catch (err) {
+    vlog('stale repair token cleanup failed', err.message);
   }
 }
 

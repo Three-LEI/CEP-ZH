@@ -20,6 +20,7 @@ Adobe 2020 及以上版本的 CEP 面板通用汉化管理器。
 - 字典热更新、全局/单插件开关、AI 翻译
 - 管理面板编辑字典、导入导出、自动捕获
 - 新增插件检测：用户目录自动补 `.debug`，系统目录在面板提示并以管理员权限修复
+- 管理员写入使用自带的 `CEP汉化修复工具.exe`，不依赖 PowerShell
 - 原生 C++ 安装器：自动下载最新源码和 Node 运行时，带桌面快捷方式与卸载
 
 ## 构建安装器
@@ -73,6 +74,7 @@ CepZhInstaller.exe --uninstall
 ```text
 product/cep.zh.manager   管理面板（HTML/CSS/JS）
 tools/cep-zh             Agent、CLI、运行时和字典
+tools/elevate            C++ 管理员写入助手（CEP汉化修复工具.exe）
 tools/bootstrap          CEP12 引擎代理
 installer/native         C++ 安装器
 ```
