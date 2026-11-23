@@ -4,6 +4,12 @@ Adobe 2020 及以上版本的 CEP 面板通用汉化管理器。
 
 [GitHub](https://github.com/Three-LEI/CEP-ZH) · [哔哩哔哩](https://space.bilibili.com/353544977)
 
+## 下载
+
+[下载最新版安装器](https://github.com/Three-LEI/CEP-ZH/releases/latest) → `CepZhInstaller.exe`
+
+0.2.1 起安装器会同时安装中文提权工具 `CEP汉化修复工具.exe`。旧版安装器不会安装该工具，请使用新版。
+
 ## 兼容范围
 
 - **支持：Adobe 2020 或更新版本**（PS / AE / AI / PR 等 CEP 面板）
