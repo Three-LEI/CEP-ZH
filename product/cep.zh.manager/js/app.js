@@ -353,7 +353,8 @@
       { group: 'Agent', label: '调试分配 / 备份索引', path: tools + '/state.json', kind: 'file', desc: '.debug 端口分配和 .cep-zh.bak 备份记录' },
       { group: 'Agent', label: '抓词 / 扫描缓存', path: tools + '/catalog', kind: 'dir', desc: 'catalog 命令输出的面板字符串缓存' },
       { group: 'Agent', label: '修复工具', path: agent + '/bin/CEP汉化修复工具.exe', kind: 'file', desc: '管理员权限写入 .debug 的原生工具' },
-      { group: '管理面板', label: '宿主打开脚本', path: EXTENSION + '/jsx/cepzh-open.jsx', kind: 'file', desc: '通过 ExtendScript 打开文件、文件夹、链接和安装器' }
+      { group: '管理面板', label: '宿主打开脚本', path: EXTENSION + '/jsx/cepzh-open.jsx', kind: 'file', desc: '通过 ExtendScript 打开文件、文件夹和安装器' },
+      { group: '管理面板', label: '内置安装器', path: EXTENSION + '/installer/CepZhInstaller.exe', kind: 'file', desc: '面板更新入口；卸载时随扩展目录删除' }
     ];
     if (local) {
       items.push(
@@ -441,7 +442,14 @@
   }
 
   function openInstallerUpdate() {
-    openUrlSafe(RELEASES_URL);
+    var installer = EXTENSION + '/installer/CepZhInstaller.exe';
+    if (pathExists(installer)) {
+      openViaJsx('run', installer, false, function () {
+        openUrlSafe(RELEASES_URL, true);
+      });
+      return;
+    }
+    openUrlSafe(RELEASES_URL, true);
   }
 
   function fallbackCopy(text) {

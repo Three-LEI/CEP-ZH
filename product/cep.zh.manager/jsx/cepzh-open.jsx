@@ -16,3 +16,17 @@ function CEPZH_OPEN_PATH(path, isFile) {
     } catch (e) {}
     return "ERR";
 }
+
+// Copy the installer out of the CEP extension directory before executing it.
+// This avoids a locked extension directory when the installer replaces the panel.
+function CEPZH_RUN_FILE(path) {
+    try {
+        var source = new File(path);
+        if (!source.exists) return "ERR";
+        var target = new File(Folder.temp.fsName + "/CepZhInstaller.exe");
+        if (target.exists) target.remove();
+        if (!source.copy(target)) return "ERR";
+        if (target.execute()) return "OK";
+    } catch (e) {}
+    return "ERR";
+}

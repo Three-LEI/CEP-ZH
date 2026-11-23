@@ -24,7 +24,7 @@ using Microsoft::WRL::ComPtr;
 namespace
 {
 constexpr wchar_t kWindowClass[] = L"CEP.ZH.Installer.Window";
-constexpr wchar_t kWindowTitle[] = L"CEP 汉化管理器 · 安装器 v0.4.2";
+constexpr wchar_t kWindowTitle[] = L"CEP 汉化管理器 · 安装器 v0.5.0";
 constexpr int kWidth = 760;
 constexpr int kHeight = 570;
 constexpr UINT kMsgUpdate = WM_APP + 1;
@@ -877,6 +877,28 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
 {
+    if (!IsAdmin()) {
+        int argc = 0;
+        LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+        std::wstring params;
+        if (argv) {
+            for (int i = 1; i < argc; ++i) params += L" " + QuoteArg(argv[i]);
+            LocalFree(argv);
+        }
+        wchar_t self[MAX_PATH * 4]{};
+        if (!GetModuleFileNameW(nullptr, self, (DWORD)std::size(self))) return 1;
+        SHELLEXECUTEINFOW sei{};
+        sei.cbSize = sizeof(sei);
+        sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+        sei.lpVerb = L"runas";
+        sei.lpFile = self;
+        sei.lpParameters = params.empty() ? nullptr : params.c_str();
+        sei.nShow = show;
+        if (!ShellExecuteExW(&sei)) return 1;
+        if (sei.hProcess) CloseHandle(sei.hProcess);
+        return 0;
+    }
+
     const bool preview = wcsstr(GetCommandLineW(), L"--preview") != nullptr;
     const bool autoStart = wcsstr(GetCommandLineW(), L"--auto") != nullptr;
     const bool autoUninstall = wcsstr(GetCommandLineW(), L"--uninstall") != nullptr;
