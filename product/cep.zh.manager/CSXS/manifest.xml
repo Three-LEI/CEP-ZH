@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ExtensionManifest Version="7.0" ExtensionBundleId="cep.zh.manager" ExtensionBundleVersion="0.7.0"
+<ExtensionManifest Version="7.0" ExtensionBundleId="cep.zh.manager" ExtensionBundleVersion="0.7.1"
     ExtensionBundleName="CEP 汉化管理器" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
-    <Extension Id="cep.zh.manager.panel" Version="0.7.0" />
-    <Extension Id="cep.zh.agent" Version="0.7.0" />
+    <Extension Id="cep.zh.manager.panel.v2" Version="0.7.1" />
+    <Extension Id="cep.zh.agent" Version="0.7.1" />
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>
@@ -25,7 +25,7 @@
     </RequiredRuntimeList>
   </ExecutionEnvironment>
   <DispatchInfoList>
-    <Extension Id="cep.zh.manager.panel">
+    <Extension Id="cep.zh.manager.panel.v2">
       <DispatchInfo>
         <Resources>
           <MainPath>./index.html</MainPath>
@@ -34,7 +34,7 @@
           <AutoVisible>true</AutoVisible>
         </Lifecycle>
         <UI>
-          <Type>Panel</Type>
+          <Type>Modeless</Type>
           <Menu>CEP 汉化管理</Menu>
           <Geometry>
             <Size>
@@ -42,8 +42,8 @@
               <Width>560</Width>
             </Size>
             <MinSize>
-              <Height>200</Height>
-              <Width>150</Width>
+              <Height>600</Height>
+              <Width>520</Width>
             </MinSize>
           </Geometry>
         </UI>

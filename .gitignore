@@ -26,6 +26,7 @@ installer/native/*.ilk
 *.zip
 *.7z
 *.tmp
+.tmp-release/
 .DS_Store
 Thumbs.db
 

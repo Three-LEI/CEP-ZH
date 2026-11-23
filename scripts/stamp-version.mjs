@@ -27,7 +27,7 @@ replace('product/cep.zh.manager/index.html', (s) =>
 
 replace('product/cep.zh.manager/CSXS/manifest.xml', (s) =>
     s.replace(/ExtensionBundleVersion="[0-9.]+"/, `ExtensionBundleVersion="${version}"`)
-     .replace(/(<Extension Id="cep\.zh\.(?:manager\.)?(?:panel|agent|agent)" Version=")[0-9.]+(")/g, `$1${version}$2`));
+     .replace(/(<Extension Id="[^"]+" Version=")[0-9.]+(")/g, `$1${version}$2`));
 
 replace('installer/native/src/installer.h', (s) =>
     s.replace(/kCepZhVersion\[\] = L"[0-9.]+"/, `kCepZhVersion[] = L"${version}"`));
