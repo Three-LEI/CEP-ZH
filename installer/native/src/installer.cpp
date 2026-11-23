@@ -11,9 +11,11 @@
 #include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl.h>
+#include <bcrypt.h>
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -21,6 +23,8 @@
 #include <regex>
 #include <sstream>
 #include <vector>
+
+#pragma comment(lib, "bcrypt.lib")
 
 namespace fs = std::filesystem;
 
@@ -42,17 +46,19 @@ const wchar_t* kNodeUrls[] = {
     L"https://nodejs.org/dist/v22.14.0/node-v22.14.0-win-x64.zip",
 };
 const wchar_t* kNodeLabels[] = { L"npmmirror", L"清华镜像", L"阿里云镜像", L"Node.js 官方" };
+constexpr wchar_t kNodeSha256[] = L"55b639295920b219bb2acbcfa00f90393a2789095b7323f79475c9f34795f217";
 constexpr wchar_t kHosts[] = L"AEFT,PHXS,PPRO,ILST,IDSN,FLPR,AUDT,DRWV";
 const wchar_t* kRepoUrls[] = {
-    L"https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/archive/refs/heads/main.zip",
-    L"https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/archive/refs/heads/main.zip",
-    L"https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/archive/refs/heads/main.zip",
-    L"https://ghproxy.imciel.com/https://github.com/Three-LEI/CEP-ZH/archive/refs/heads/main.zip",
-    L"https://codeload.github.com/Three-LEI/CEP-ZH/zip/refs/heads/main",
+    L"https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.3/CEP-ZH-runtime-v0.2.3.zip",
+    L"https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.3/CEP-ZH-runtime-v0.2.3.zip",
+    L"https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.3/CEP-ZH-runtime-v0.2.3.zip",
+    L"https://ghproxy.imciel.com/https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.3/CEP-ZH-runtime-v0.2.3.zip",
+    L"https://github.com/Three-LEI/CEP-ZH/releases/download/v0.2.3/CEP-ZH-runtime-v0.2.3.zip",
 };
 const wchar_t* kRepoLabels[] = {
     L"ghfast.top", L"gh-proxy.com", L"ghproxy.net", L"ghproxy.imciel.com", L"GitHub 直连",
 };
+constexpr wchar_t kSourceSha256[] = L"3c64dee6a073c4280a732534230c1f43062d8da49cfed4c5a3a6901063a5341d";
 
 bool ParseHttpUrl(const std::wstring& url, std::wstring& host, std::wstring& path, INTERNET_PORT& port, bool& secure)
 {
@@ -72,6 +78,72 @@ bool ParseHttpUrl(const std::wstring& url, std::wstring& host, std::wstring& pat
         host = authority;
     }
     return !host.empty();
+}
+
+bool Sha256File(const std::wstring& path, std::wstring& hex, std::wstring& error)
+{
+    BCRYPT_ALG_HANDLE algorithm = nullptr;
+    BCRYPT_HASH_HANDLE hash = nullptr;
+    DWORD objectSize = 0;
+    DWORD hashSize = 0;
+    DWORD resultSize = 0;
+    NTSTATUS status = BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0);
+    if (status < 0) { error = L"SHA-256 初始化失败"; return false; }
+    status = BCryptGetProperty(algorithm, BCRYPT_OBJECT_LENGTH,
+        reinterpret_cast<PUCHAR>(&objectSize), sizeof(objectSize), &resultSize, 0);
+    if (status < 0) { BCryptCloseAlgorithmProvider(algorithm, 0); error = L"SHA-256 参数失败"; return false; }
+    status = BCryptGetProperty(algorithm, BCRYPT_HASH_LENGTH,
+        reinterpret_cast<PUCHAR>(&hashSize), sizeof(hashSize), &resultSize, 0);
+    if (status < 0) { BCryptCloseAlgorithmProvider(algorithm, 0); error = L"SHA-256 参数失败"; return false; }
+
+    std::vector<BYTE> object(objectSize);
+    std::vector<BYTE> digest(hashSize);
+    status = BCryptCreateHash(algorithm, &hash, object.data(), objectSize, nullptr, 0, 0);
+    if (status < 0) { BCryptCloseAlgorithmProvider(algorithm, 0); error = L"SHA-256 创建失败"; return false; }
+
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        BCryptDestroyHash(hash);
+        BCryptCloseAlgorithmProvider(algorithm, 0);
+        error = L"无法读取下载文件";
+        return false;
+    }
+
+    bool ok = true;
+    std::vector<BYTE> buffer(1024 * 1024);
+    for (;;) {
+        DWORD read = 0;
+        if (!ReadFile(file, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr)) {
+            ok = false;
+            error = L"读取下载文件失败";
+            break;
+        }
+        if (!read) break;
+        status = BCryptHashData(hash, buffer.data(), read, 0);
+        if (status < 0) {
+            ok = false;
+            error = L"SHA-256 计算失败";
+            break;
+        }
+    }
+    CloseHandle(file);
+    if (ok) {
+        status = BCryptFinishHash(hash, digest.data(), hashSize, 0);
+        if (status < 0) { ok = false; error = L"SHA-256 完成失败"; }
+    }
+    BCryptDestroyHash(hash);
+    BCryptCloseAlgorithmProvider(algorithm, 0);
+    if (!ok) return false;
+
+    static const wchar_t* digits = L"0123456789abcdef";
+    hex.clear();
+    hex.reserve(hashSize * 2);
+    for (BYTE byte : digest) {
+        hex.push_back(digits[byte >> 4]);
+        hex.push_back(digits[byte & 0x0f]);
+    }
+    return true;
 }
 
 bool HttpDownload(const std::wstring& url, const std::wstring& outPath,
@@ -102,6 +174,9 @@ bool HttpDownload(const std::wstring& url, const std::wstring& outPath,
         error = L"无法创建 HTTP 请求";
         return false;
     }
+
+    DWORD redirectPolicy = WINHTTP_OPTION_REDIRECT_POLICY_ALWAYS;
+    WinHttpSetOption(request, WINHTTP_OPTION_REDIRECT_POLICY, &redirectPolicy, sizeof(redirectPolicy));
 
     if (secure) {
         DWORD protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_1 |
@@ -631,13 +706,21 @@ bool RunInstaller(const UiPublish& publish)
             status = std::wstring(L"下载 Node.js · ") + kNodeLabels[i];
             apply();
             if (HttpDownload(kNodeUrls[i], nodeZip, nodeProgress, downloadError)) {
-                nodeDownloaded = true;
-                break;
+                std::wstring actualHash;
+                std::wstring hashError;
+                if (Sha256File(nodeZip, actualHash, hashError)
+                    && _wcsicmp(actualHash.c_str(), kNodeSha256) == 0) {
+                    nodeDownloaded = true;
+                    break;
+                }
+                log(L"Node 校验失败：" + (hashError.empty() ? actualHash : hashError));
+                DeleteFileW(nodeZip.c_str());
+            } else {
+                log(std::wstring(L"Node 源失败 ") + kNodeLabels[i] + L"：" + downloadError);
+                DeleteFileW(nodeZip.c_str());
             }
-            log(std::wstring(L"Node 源失败 ") + kNodeLabels[i] + L"：" + downloadError);
-            DeleteFileW(nodeZip.c_str());
         }
-        if (!nodeDownloaded) return fail(L"下载 Node.js 失败：" + downloadError);
+        if (!nodeDownloaded) return fail(L"下载或校验 Node.js 失败：" + downloadError);
 
         const std::wstring nodeRoot = JoinPath(KnownFolder(FOLDERID_LocalAppData), L"CEP-ZH\\node");
         RemoveTree(nodeRoot);
@@ -655,10 +738,10 @@ bool RunInstaller(const UiPublish& publish)
     }
     progress = std::max(progress, 30);
     step1 = L"下载 CEP 汉化文件";
-    status = L"从 GitHub 下载最新 CEP-ZH source…";
+    status = L"下载固定版本 CEP-ZH 运行时并校验 SHA-256…";
     apply();
 
-    // 2. Download repository -------------------------------------------------
+    // 2. Download pinned runtime archive -------------------------------------
     const std::wstring repoZip = JoinPath(tempRoot, L"repo.zip");
     std::wstring downloadError;
     auto repoProgress = [&](uint64_t got, uint64_t total) {
@@ -675,14 +758,28 @@ bool RunInstaller(const UiPublish& publish)
         log(status);
         apply();
         downloadError.clear();
-        if (HttpDownload(kRepoUrls[i], repoZip, repoProgress, downloadError)) {
-            downloaded = true;
-            break;
+        if (!HttpDownload(kRepoUrls[i], repoZip, repoProgress, downloadError)) {
+            log(L"下载源失败：" + downloadError);
+            DeleteFileW(repoZip.c_str());
+            continue;
         }
-        log(L"下载源失败：" + downloadError);
+        std::wstring actualHash;
+        std::wstring hashError;
+        if (!Sha256File(repoZip, actualHash, hashError)) {
+            log(L"SHA-256 读取失败：" + hashError);
+            DeleteFileW(repoZip.c_str());
+            continue;
+        }
+        if (_wcsicmp(actualHash.c_str(), kSourceSha256) != 0) {
+            log(L"下载源 SHA-256 不匹配：" + actualHash);
+            DeleteFileW(repoZip.c_str());
+            continue;
+        }
+        downloaded = true;
+        break;
     }
     if (!downloaded)
-        return fail(L"下载 CEP-ZH 失败（直连与代理均不可用）：" + downloadError);
+        return fail(L"下载或校验 CEP-ZH 运行时失败：" + downloadError);
     Trace(L"DOWNLOADED");
 
     // 3. Extract -------------------------------------------------------------
