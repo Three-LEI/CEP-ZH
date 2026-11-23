@@ -10,6 +10,7 @@
 //   node cli.mjs catalog  [--all | --port 39210]
 //
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
@@ -216,13 +217,33 @@ async function cmdEnable(argv) {
   if (skipped.length) {
     if (values.elevate && process.platform === 'win32') {
       console.log('\nrequesting elevation...');
-      // process.argv.slice(2) starts at the CLI verb; the elevated Node process
-      // also needs the script path before it, or Node exits 1 immediately.
+      // Keep the long --only list out of the UAC command line. A temporary
+      // script also lets us capture the elevated process output and exit code.
       const args = [process.argv[1], ...process.argv.slice(2).filter((a) => a !== '--elevate')];
-      const quoted = args.map((a) => "'" + String(a).replace(/'/g, "''") + "'").join(',');
-      const node = process.execPath.replace(/'/g, "''");
-      const cmd = `$p = Start-Process -FilePath '${node}' -ArgumentList @(${quoted}) -Verb RunAs -Wait -PassThru; exit $p.ExitCode`;
-      const elevated = spawnSync('powershell.exe', ['-NoProfile', '-Command', cmd], { stdio: 'inherit' });
+      const psq = (s) => "'" + String(s).replace(/'/g, "''") + "'";
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cepzh-elev-'));
+      const child = path.join(dir, 'run.ps1');
+      const launcher = path.join(dir, 'launch.ps1');
+      const log = path.join(dir, 'output.log');
+      const cmd = args.map(psq).join(' ');
+      const childText = [
+        `$ErrorActionPreference = 'Continue'`,
+        `& ${psq(process.execPath)} ${cmd} *> ${psq(log)}`,
+        `$code = $LASTEXITCODE`,
+        `"EXIT $code" | Add-Content ${psq(log)}`,
+        `exit $code`,
+      ].join('\r\n');
+      const launchText = [
+        `$p = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',${psq(child)}) -Verb RunAs -Wait -PassThru`,
+        `exit $p.ExitCode`,
+      ].join('\r\n');
+      fs.writeFileSync(child, childText);
+      fs.writeFileSync(launcher, launchText);
+      const elevated = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', launcher], { stdio: 'inherit' });
+      try {
+        if (fs.existsSync(log)) console.log(fs.readFileSync(log, 'utf8').trim());
+      } catch {}
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
       return elevated.status == null ? 1 : elevated.status;
     }
     console.log('\nRun the same command from an elevated prompt (or add --elevate) to cover system-wide extensions.');
