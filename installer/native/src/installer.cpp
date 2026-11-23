@@ -35,13 +35,23 @@ void Trace(const std::wstring& message)
     file.write(line.data(), static_cast<std::streamsize>(line.size()));
 }
 
-constexpr wchar_t kNodeZipUrl[] = L"https://nodejs.org/dist/v22.14.0/node-v22.14.0-win-x64.zip";
-constexpr wchar_t kNodeMirrorUrl[] = L"https://npmmirror.com/mirrors/node/v22.14.0/node-v22.14.0-win-x64.zip";
+const wchar_t* kNodeUrls[] = {
+    L"https://npmmirror.com/mirrors/node/v22.14.0/node-v22.14.0-win-x64.zip",
+    L"https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/v22.14.0/node-v22.14.0-win-x64.zip",
+    L"https://mirrors.aliyun.com/nodejs-release/v22.14.0/node-v22.14.0-win-x64.zip",
+    L"https://nodejs.org/dist/v22.14.0/node-v22.14.0-win-x64.zip",
+};
+const wchar_t* kNodeLabels[] = { L"npmmirror", L"清华镜像", L"阿里云镜像", L"Node.js 官方" };
 constexpr wchar_t kHosts[] = L"AEFT,PHXS,PPRO,ILST,IDSN,FLPR,AUDT,DRWV";
 const wchar_t* kRepoUrls[] = {
+    L"https://ghfast.top/https://github.com/Three-LEI/CEP-ZH/archive/refs/heads/main.zip",
     L"https://gh-proxy.com/https://github.com/Three-LEI/CEP-ZH/archive/refs/heads/main.zip",
     L"https://ghproxy.net/https://github.com/Three-LEI/CEP-ZH/archive/refs/heads/main.zip",
+    L"https://ghproxy.imciel.com/https://github.com/Three-LEI/CEP-ZH/archive/refs/heads/main.zip",
     L"https://codeload.github.com/Three-LEI/CEP-ZH/zip/refs/heads/main",
+};
+const wchar_t* kRepoLabels[] = {
+    L"ghfast.top", L"gh-proxy.com", L"ghproxy.net", L"ghproxy.imciel.com", L"GitHub 直连",
 };
 
 bool ParseHttpUrl(const std::wstring& url, std::wstring& host, std::wstring& path, INTERNET_PORT& port, bool& secure)
@@ -603,7 +613,7 @@ bool RunInstaller(const UiPublish& publish)
     if (node.empty()) {
         step1 = L"下载 Node.js 运行时";
         status = L"未检测到 Node.js，正在下载便携运行时…";
-        log(L"未检测到 Node.js 18+，下载 " + std::wstring(kNodeZipUrl));
+        log(L"未检测到 Node.js 18+，下载 Node.js 22.14.0");
         apply();
 
         const std::wstring nodeZip = JoinPath(tempRoot, L"node.zip");
@@ -616,11 +626,18 @@ bool RunInstaller(const UiPublish& publish)
                      (total ? L" / " + FormatBytes(total) : L"");
             apply();
         };
-        if (!HttpDownload(kNodeZipUrl, nodeZip, nodeProgress, downloadError)) {
-            log(L"官方源失败：" + downloadError + L"，尝试镜像");
-            if (!HttpDownload(kNodeMirrorUrl, nodeZip, nodeProgress, downloadError))
-                return fail(L"下载 Node.js 失败：" + downloadError);
+        bool nodeDownloaded = false;
+        for (size_t i = 0; i < std::size(kNodeUrls); ++i) {
+            status = std::wstring(L"下载 Node.js · ") + kNodeLabels[i];
+            apply();
+            if (HttpDownload(kNodeUrls[i], nodeZip, nodeProgress, downloadError)) {
+                nodeDownloaded = true;
+                break;
+            }
+            log(std::wstring(L"Node 源失败 ") + kNodeLabels[i] + L"：" + downloadError);
+            DeleteFileW(nodeZip.c_str());
         }
+        if (!nodeDownloaded) return fail(L"下载 Node.js 失败：" + downloadError);
 
         const std::wstring nodeRoot = JoinPath(KnownFolder(FOLDERID_LocalAppData), L"CEP-ZH\\node");
         RemoveTree(nodeRoot);
@@ -644,7 +661,6 @@ bool RunInstaller(const UiPublish& publish)
     // 2. Download repository -------------------------------------------------
     const std::wstring repoZip = JoinPath(tempRoot, L"repo.zip");
     std::wstring downloadError;
-    const wchar_t* repoLabels[] = { L"gh-proxy.com", L"ghproxy.net", L"GitHub 直连" };
     auto repoProgress = [&](uint64_t got, uint64_t total) {
         const int p = 30 + (total ? static_cast<int>((got * 35) / total) : 0);
         if (p == progress) return;
@@ -655,7 +671,7 @@ bool RunInstaller(const UiPublish& publish)
     };
     bool downloaded = false;
     for (size_t i = 0; i < std::size(kRepoUrls); ++i) {
-        status = std::wstring(L"下载 CEP-ZH · ") + repoLabels[i];
+        status = std::wstring(L"下载 CEP-ZH · ") + kRepoLabels[i];
         log(status);
         apply();
         downloadError.clear();
