@@ -53,12 +53,24 @@ export async function connect(wsUrl) {
 }
 
 export async function evaluate(client, expression, { awaitPromise = true } = {}) {
-  const r = await client.send('Runtime.evaluate', {
+  const params = {
     expression,
     returnByValue: true,
     awaitPromise,
     allowUnsafeEvalBlockedByCSP: true,
-  });
+  };
+  let r;
+  try {
+    r = await client.send('Runtime.evaluate', params);
+  } catch (err) {
+    // CEP 9 (Chromium 61) rejects awaitPromise:true even when the expression
+    // is synchronous. Retry without it so injection and control messages still
+    // work on legacy hosts.
+    if (awaitPromise && /not a promise/i.test(String(err.message))) {
+      return evaluate(client, expression, { awaitPromise: false });
+    }
+    throw err;
+  }
   if (r.exceptionDetails) {
     throw new Error(r.exceptionDetails.exception?.description || JSON.stringify(r.exceptionDetails));
   }

@@ -2,7 +2,7 @@
 <html lang="zh-CN" data-theme="dark">
 <head>
   <meta charset="utf-8" />
-  <title>CEP 汉化管理器</title>
+  <title>ZyYu-CEP通用汉化管理</title>
   <link rel="stylesheet" href="./css/app.css" />
 </head>
 <body>
@@ -19,13 +19,13 @@
   <header class="topbar">
     <div class="brand">
       <div class="brand-row">
-        <h1>CEP 汉化管理器</h1>
-        <span class="brand-code">/ CEP-ZH EDITOR</span>
+        <h1>ZyYu-CEP通用汉化管理</h1>
+        <span class="brand-code">/ ZyYu-CEP EDITOR</span>
       </div>
       <div class="byline">
         <span class="byline-name">three-lei × deepseek</span>
         <span class="byline-sep"></span>
-        <span class="version">v0.7.2</span>
+        <span class="version">v0.8.0</span>
       </div>
     </div>
     <div class="top-actions">
@@ -98,10 +98,10 @@
             <p id="pluginMeta">左侧选择插件，或打开 CEP 面板后点击“捕获已打开插件”。</p>
           </div>
           <div class="view-actions">
-            <label class="switch small" title="只停用/启用当前插件">
+            <label class="switch small" title="只开启/停用当前选中的插件，不影响其他插件">
               <input type="checkbox" id="pluginToggle" />
               <span class="track"><span class="thumb"></span></span>
-              <span class="switch-text">该插件汉化</span>
+              <span class="switch-text">仅该插件汉化</span>
             </label>
             <button id="btnAdd" class="btn">＋ 添加词条</button>
             <button id="btnAi" class="btn" title="翻译当前插件中尚未翻译的词条">AI 翻译</button>
@@ -117,7 +117,10 @@
               <button data-filter="all" class="active">全部</button>
               <button data-filter="untranslated">未翻译</button>
               <button data-filter="translated">已翻译</button>
-              <button data-filter="common">公共回退</button>
+            </div>
+            <div class="segmented view-mode" id="viewModeSeg" title="切换表格 / 逐行文本视图">
+              <button data-viewmode="table" class="active" title="每个词条一行，分页显示">表格</button>
+              <button data-viewmode="lines" title="所有词条放在一个大文本框中，每行 原文=译文">逐行文本</button>
             </div>
             <div class="table-search">
               <span class="slash">/</span>
@@ -125,7 +128,7 @@
             </div>
             <div class="table-info" id="tableInfo"></div>
           </div>
-          <div class="table-scroll">
+          <div class="table-scroll" id="pluginTableScroll">
             <table>
               <thead>
                 <tr>
@@ -140,6 +143,15 @@
           </div>
           <div id="pluginEmpty" class="empty hidden">没有匹配的词条</div>
           <div class="pager" id="pluginPager"></div>
+          <div id="pluginTextView" class="text-view hidden">
+            <textarea id="pluginTextEditor" spellcheck="false" placeholder="每行格式：原文=译文&#10;没有译文的行直接写成：原文="></textarea>
+            <div class="text-view-actions">
+              <span class="text-view-hint">每行 <code>原文=译文</code>；没有译文就留空。可直接全选/多选复制到网页 AI。</span>
+              <button id="btnCopyTextView" class="btn">复制全部</button>
+              <button id="btnCopyPrompt" class="btn">复制网页端提示词</button>
+              <button id="btnApplyTextView" class="btn primary">应用修改</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -218,7 +230,7 @@
             <input id="apiLang" value="zh-CN" />
             <div class="card-actions">
               <button id="btnSaveApi" class="btn primary">保存配置</button>
-              <button id="btnTestApi" class="btn" disabled title="下一版接入">测试连接</button>
+              <button id="btnTestApi" class="btn" title="用一条测试文本验证当前 API 配置">测试连接</button>
             </div>
           </div>
 
@@ -287,10 +299,10 @@
         <div class="settings-grid">
           <div class="panel settings-card">
             <div class="panel-label">05 / PROJECT</div>
-            <h3>CEP-ZH</h3>
+            <h3>ZyYu-CEP</h3>
             <p class="hint">通用 CEP 面板汉化框架与管理器，运行在 Adobe CEP 面板内。</p>
             <div class="about-meta">
-              CEP 汉化管理器 v0.5.1<br />
+              ZyYu-CEP通用汉化管理 v0.8.0<br />
               three-lei × deepseek<br />
               代码：MIT · 字体：MiSans
             </div>
@@ -306,7 +318,7 @@
             </div>
             <p class="hint">哔哩哔哩：</p>
             <a id="biliLink" class="btn" target="_blank" rel="noreferrer">哔哩哔哩主页</a>
-            <div class="about-meta">three-lei × deepseek<br />CEP 汉化管理器 v0.5.1</div>
+            <div class="about-meta">three-lei × deepseek<br />ZyYu-CEP通用汉化管理 v0.8.0</div>
           </div>
         </div>
 
@@ -327,16 +339,16 @@
 
   <section id="compactView" class="compact-view" aria-label="全局汉化">
     <div class="compact-inner">
-      <div class="compact-brand">CEP-ZH</div>
+      <div class="compact-brand">ZyYu-CEP</div>
       <div class="compact-title">全局汉化</div>
-      <div class="compact-micro-label">CEP 汉化</div>
+      <div class="compact-micro-label">ZyYu-CEP</div>
       <label class="compact-switch" title="全局启用/停用汉化">
         <input type="checkbox" id="compactToggle" />
         <span class="compact-track"><span class="compact-thumb"></span></span>
       </label>
       <div id="compactState" class="compact-state">已开启</div>
       <div id="compactAgent" class="compact-agent">AGENT / 等待中</div>
-      <div class="compact-note">按钮开关 CEP 汉化，将窗口拉大可编辑汉化字典。</div>
+      <div class="compact-note">按钮开关通用汉化，将窗口拉大可编辑汉化字典。</div>
     </div>
   </section>
 
@@ -363,6 +375,17 @@
         <button type="submit" class="btn primary">保存</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="translateAllDialog" class="dialog">
+    <div class="eyebrow">AI TRANSLATE / ALL</div>
+    <h3>确认翻译全部字典？</h3>
+    <p id="translateAllSummary" class="hint"></p>
+    <p class="hint">这会对全部插件的未翻译词条发起 AI 请求。词条较多时可能消耗较多 Token/费用，建议先到“导出 / 导入”备份字典。</p>
+    <div class="dialog-actions">
+      <button type="button" id="translateAllCancel" class="btn">取消</button>
+      <button type="button" id="translateAllConfirm" class="btn primary">确认翻译</button>
+    </div>
   </dialog>
 
   <script src="./js/app.js"></script>

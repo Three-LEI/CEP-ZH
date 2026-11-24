@@ -1,138 +1,100 @@
-# CEP-ZH
+# ZyYu-CEP通用汉化管理
 
-Adobe 2020 及以上版本的 CEP 面板通用汉化管理器。
+Adobe CEP 面板通用汉化方案：**不修改扩展源码**，通过本地调试协议注入运行时，实现字典驱动的界面翻译、全局/单插件开关和 AI 辅助翻译。
 
-[GitHub](https://github.com/Three-LEI/CEP-ZH) · [哔哩哔哩](https://space.bilibili.com/353544977)
+<p align="center">
+  <img src="assets/architecture.png" alt="CEP 通用汉化原理架构图" width="100%">
+</p>
 
-## 下载
+## 原理
 
-[下载最新版安装器](https://github.com/Three-LEI/CEP-ZH/releases/latest) → `CepZhInstaller.exe`
+CEP 面板本质上是运行在 Adobe 宿主中的 Chromium 页面。项目不替换扩展文件，而是把运行时注入到页面 DOM 中：
 
-0.2.1 起安装器会同时安装中文提权工具 `CEP汉化修复工具.exe`。旧版安装器不会安装该工具，请使用新版。
+1. Adobe 启动时，隐藏的 Agent 面板拉起一个独立的 Node.js Agent。
+2. Agent 发现 CEP 面板的 `.debug` 调试端口，通过本地 CDP WebSocket 连接到面板。
+3. Agent 注入 `runtime.js`；运行时扫描文本节点和 `title`、`placeholder`、`aria-*` 等 UI 属性。
+4. 运行时按字典替换文案，并用 `MutationObserver` 持续处理面板重绘。
+5. 管理器通过本地文件控制开关、字典和翻译任务，不与 Adobe 源码耦合。
 
-0.7.0 起安装器从签名清单获取最新运行时，并对运行时和 Node.js ZIP 做 SHA-256 校验；下载代理只负责传输，无法篡改内容。
+字典按优先级合并：
 
-0.7.1 起管理面板改为独立 Modeless 窗口，不再参与宿主停靠面板组，避免 CEP 关闭其他面板时被连带关闭或变空白。
+```text
+用户覆盖 > 插件字典 > 公共字典
+```
 
-0.7.2 起管理面板初始尺寸为 `1200 × 800`，可以在 `150 × 200` 到 `1600 × 1000` 之间自由缩放；安装包内置 MiSans Regular/Medium，界面中文不再回退到宋体。
-
-## 兼容范围
-
-- **支持：Adobe 2020 或更新版本**（PS / AE / AI / PR 等 CEP 面板）
-- **不支持：Adobe 2019 及更早版本**
-- Windows 10 / 11
-- CEP 9–12：统一使用官方 `.debug` 调试端口；已有 `.debug` 的插件保留
-- 不再修改 Adobe 安装目录，也不安装 `VCRUNTIME140_1.dll` 代理
-- 管理面板是独立浮动窗口，可调整大小，不参与宿主停靠面板组
-- 管理面板在小尺寸下自动切换为紧凑开关；最小可到 `150 × 200`
+插件译文为空时回退到公共字典，因此空值不会遮挡公共回退。
 
 ## 功能
 
-- 不修改扩展源码，通过 CDP 注入翻译运行时
-- 插件字典 / 公共字典，空译文回退公共字典
-- 字典热更新、全局/单插件开关、AI 翻译
-- 免登录翻译源：Microsoft Edge、Google、Yandex；另支持 OpenAI 兼容和 DeepL
-- 管理面板编辑字典、导入导出、自动捕获
-- 新增插件检测：用户目录自动补 `.debug`，系统目录在面板提示并以管理员权限修复
-- 管理员写入使用自带的 `CEP汉化修复工具.exe`，不依赖 PowerShell
-- 独立原生 C++ 安装器：自动下载运行时；不创建桌面快捷方式，不把安装器复制到本机
-- 管理面板使用独立窗口，和 Agent 分离；关闭其他 CEP 插件不会连带关闭管理器
+- 不修改扩展源码，运行时注入汉化
+- 公共字典 + 插件字典 + 用户覆盖，空值自动回退
+- 全局汉化开关、单插件开关
+- 管理器内编辑、导入导出、自动捕获面板词条
+- 表格视图 / 逐行文本视图；逐行文本可多选复制到网页 AI
+- 字典热更新、运行时开关
+- 可选翻译源：Edge、Google、Yandex、OpenAI 兼容接口、DeepL
+- 支持 CEP 9–12，兼容 Adobe 2020 及以上版本
 
-## 构建安装器
+## 兼容范围
 
-环境：
+- **支持：** Adobe 2020 或更新版本（After Effects / Photoshop / Premiere Pro / Illustrator 等 CEP 面板）
+- **不支持：** Adobe 2019 及更早版本
+- Windows 10 / 11
+- 管理面板是独立 Modeless 窗口，不参与宿主停靠面板组
 
-- Visual Studio 2022 Build Tools（MSVC v141）
-- Windows SDK 10.0.19041
-- CMake
+## 安装
+
+1. 关闭所有 Adobe 应用。
+2. 下载最新版安装器：
+
+   [下载 CepZhInstaller.exe](https://github.com/Three-LEI/CEP-ZH/releases/latest)
+
+3. 以管理员身份运行，按提示安装管理器、Agent 和 Node 运行时。
+4. 初始化 CEP 插件调试端口。
+5. 重启 Adobe 应用。
+
+日常使用不需要一直打开管理器；隐藏 Agent 会随 Adobe 启动。
+
+## 使用
+
+打开管理器：
+
+```text
+窗口 > 扩展 > ZyYu-CEP通用汉化管理
+```
+
+- `全局汉化`：控制全部插件
+- `仅该插件汉化`：只控制当前选中的插件
+- `表格`：逐条编辑，分页显示
+- `逐行文本`：全部词条放入一个文本框，每行 `原文=译文`；可复制到网页 AI
+- `复制网页端提示词`：复制预置的网页翻译提示词
+
+API Key 获取、配置和测试步骤见：
+
+[API-KEY-GUIDE.md](API-KEY-GUIDE.md)
+
+## 目录
+
+```text
+product/cep.zh.manager   管理面板（HTML / CSS / JS）
+tools/cep-zh             Agent、CLI、运行时和字典
+tools/elevate            管理员写入助手
+installer/native         C++ 安装器
+assets/                  架构图与仓库图片
+```
+
+## 构建
+
+安装器构建：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File installer\native\scripts\build.ps1
 ```
 
-产物：
-
-```text
-installer\native\dist\CepZhInstaller.exe
-```
-
-## 版本与清单签名
-
-版本唯一来源：
-
-```text
-VERSION
-```
-
-构建前执行：
+发布包构建：
 
 ```powershell
-node scripts/stamp-version.mjs
-```
-
-它会同步面板、CEP manifest、安装器版本和资源文件。检查是否一致：
-
-```powershell
-node scripts/stamp-version.mjs --check
-```
-
-Release 清单：
-
-```text
-CEP-ZH-manifest.json
-CEP-ZH-manifest.sig
-```
-
-使用 RSA-3072 私钥签名：
-
-```text
-tools/release/private.pem
-```
-
-公钥：
-
-```text
-tools/release/public.pem
-```
-
-私钥不进入 Git，必须自行备份；丢失后无法签发可被现有客户端接受的更新清单。
-
-## 使用
-
-安装器是独立单文件，可放在任意位置；它不会创建桌面快捷方式，也不会把自身复制到本机。
-
-1. 关闭所有 Adobe 应用。
-2. 以管理员身份运行安装器。
-3. ① 安装管理器 / Agent / Node 运行时。
-4. ② 初始化 CEP 插件：为 CEP 9–12 写入 `.debug`，并清理旧版代理。
-5. 重启 Adobe 应用。
-6. 打开：
-
-```text
-窗口 > 扩展 > CEP 汉化管理
-```
-
-之后日常使用不需要保持管理面板打开；隐藏 Agent 会随 Adobe 应用启动。
-
-新增插件：
-
-- CEP 9–12 统一由 `.debug` 覆盖；
-- 系统目录会显示修复提示；
-- 设置页可“修复全部 .debug”，补写所有已存在但缺失的插件。
-
-卸载：安装器内点“卸载”，或运行：
-
-```text
-CepZhInstaller.exe --uninstall
-```
-
-## 目录
-
-```text
-product/cep.zh.manager   管理面板（HTML/CSS/JS）
-tools/cep-zh             Agent、CLI、运行时和字典
-tools/elevate            C++ 管理员写入助手（CEP汉化修复工具.exe）
-installer/native         C++ 安装器
+powershell -ExecutionPolicy Bypass -File scripts\release.ps1
 ```
 
 ## 许可

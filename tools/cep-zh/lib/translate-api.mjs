@@ -131,13 +131,25 @@ async function translateYandex(cfg, strings) {
   return out;
 }
 
-async function translateOpenAI(cfg, strings) {
+function sameText(a, b) {
+  return String(a == null ? '' : a).trim().toLowerCase() === String(b == null ? '' : b).trim().toLowerCase();
+}
+
+function openAiSystem(cfg, retry) {
+  let system = 'You are a professional software UI localizer. Translate every given UI string to ' +
+    (cfg.targetLang || 'zh-CN') + '. ' +
+    'Translate short labels and mixed labels as well; for example, "X LocalStore" should become "X 本地存储". ' +
+    'Keep placeholders, shortcuts, URLs, file paths and code identifiers unchanged, but do not return an entire string unchanged unless it is only a product name or a code symbol. ' +
+    'Return ONLY a JSON object of the form {"translations":{"original":"translation"}}.';
+  if (retry) {
+    system += ' The previous response copied these strings unchanged. Translate them now; do not echo the source.';
+  }
+  return system;
+}
+
+async function requestOpenAI(cfg, strings, retry) {
   const base = (cfg.baseUrl || '').replace(/\/+$/, '');
   const url = /\/chat\/completions$/.test(base) ? base : base + '/chat/completions';
-  const system = 'You are a professional software UI localizer. Translate the given English UI strings to ' +
-    (cfg.targetLang || 'zh-CN') +
-    '. Keep placeholders, shortcuts, product names, and technical identifiers unchanged. ' +
-    'Return ONLY a JSON object of the form {"translations":{"original":"translation"}}.';
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 90000);
   try {
@@ -148,7 +160,7 @@ async function translateOpenAI(cfg, strings) {
         model: cfg.model || (/deepseek/i.test(cfg.baseUrl || '') ? 'deepseek-flash' : 'gpt-4o-mini'),
         temperature: 0,
         messages: [
-          { role: 'system', content: system },
+          { role: 'system', content: openAiSystem(cfg, retry) },
           { role: 'user', content: JSON.stringify({ strings }) },
         ],
       }),
@@ -162,6 +174,21 @@ async function translateOpenAI(cfg, strings) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function translateOpenAI(cfg, strings) {
+  const out = await requestOpenAI(cfg, strings, false);
+  const copied = strings.filter((s) => out[s] && sameText(out[s], s));
+  if (!copied.length) return out;
+  try {
+    const retry = await requestOpenAI(cfg, copied, true);
+    for (const s of copied) {
+      if (retry[s] && !sameText(retry[s], s)) out[s] = retry[s];
+    }
+  } catch {
+    // Keep the first-pass result; the caller will skip unchanged entries.
+  }
+  return out;
 }
 
 async function translateDeepL(cfg, strings) {

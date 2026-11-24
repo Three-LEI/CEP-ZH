@@ -200,6 +200,17 @@ code { font-family: var(--mono); font-size: 0.875rem; color: var(--muted); }
 .switch input:focus-visible + .track { outline: 1px solid var(--accent); outline-offset: 2px; }
 .switch.small { font-size: 0.833rem; }
 
+/* The global switch is the primary control in the full editor; make it
+   noticeably larger than the per-plugin switch. */
+.top-actions > .switch { gap: 10px; font-size: 1rem; }
+.top-actions > .switch .track { width: 46px; height: 24px; padding: 3px; }
+.top-actions > .switch .thumb { width: 16px; height: 16px; }
+.top-actions > .switch input:checked + .track .thumb {
+  transform: translateX(22px);
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 /* ---------- buttons ---------- */
 .btn {
   border: 1px solid var(--line-2);
@@ -450,13 +461,9 @@ body.micro .compact-title,
 body.micro .compact-state,
 body.micro .compact-agent { display: none; }
 body.micro .compact-micro-label {
-  display: block;
-  margin-bottom: 7px;
-  color: var(--accent);
-  font: 0.75rem/1 var(--mono);
-  letter-spacing: 1px;
+  display: none;
 }
-body.micro .compact-switch { display: inline-flex; margin: 0 0 10px; }
+body.micro .compact-switch { display: inline-flex; margin: 0; }
 body.micro .compact-track {
   width: 54px;
   height: 26px;
@@ -467,10 +474,7 @@ body.micro .compact-switch input:checked + .compact-track .compact-thumb {
   transform: translateX(26px);
 }
 body.micro .compact-note {
-  display: block;
-  width: 100%;
-  margin-top: 0;
-  text-align: center;
+  display: none;
 }
 .side-nav { display: flex; flex-direction: column; border-top: 1px solid var(--line-2); }
 .nav-item {
@@ -567,7 +571,11 @@ body.micro .compact-note {
   gap: 12px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--line-2);
+  /* Old Chromium lets a flex item shrink below its content and the next
+     card paints over the heading; keep the header at its natural height. */
+  flex: 0 0 auto;
 }
+.view-title { min-width: 0; }
 .eyebrow { font: 0.708rem/1.3 var(--mono); letter-spacing: 1.1px; color: var(--accent); margin-bottom: 4px; }
 .view-title h2 { margin: 0; font-size: 1.583rem; font-weight: 600; line-height: 1.15; letter-spacing: 0.2px; }
 .view-title p { margin: 5px 0 0; color: var(--muted); font-size: 0.875rem; max-width: 56ch; }
@@ -734,6 +742,49 @@ tbody td { padding: 4px 9px; vertical-align: middle; }
 .pager button:hover:not(:disabled) { border-color: var(--fg); color: var(--fg); }
 .pager button:disabled { opacity: 0.3; cursor: default; }
 
+.view-mode { flex: 0 0 auto; }
+.view-mode button { letter-spacing: 0.2px; }
+
+/* ---------- line / batch text view ---------- */
+.text-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  padding: 8px 9px;
+}
+#pluginTextEditor {
+  flex: 1;
+  width: 100%;
+  min-height: 180px;
+  resize: none;
+  border: 1px solid var(--line-2);
+  background: var(--field);
+  color: var(--fg);
+  padding: 8px 9px;
+  font: 0.833rem/1.55 var(--mono);
+  outline: none;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
+}
+#pluginTextEditor:focus { border-color: var(--accent); }
+#pluginTextEditor::placeholder { color: var(--faint); }
+.text-view-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding-top: 7px;
+}
+.text-view-hint {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+.text-view-hint code { font-size: 0.75rem; color: var(--accent); }
+
 /* ---------- settings ---------- */
 .settings-head { padding-bottom: 10px; border-bottom: 1px solid var(--line-2); }
 .settings-head h2 { margin: 0; font-size: 1.583rem; font-weight: 600; }
@@ -888,6 +939,70 @@ tbody td { padding: 4px 9px; vertical-align: middle; }
 .dialog input { width: 100%; border: 1px solid var(--line-2); background: var(--field); padding: 6px 7px; font-size: 0.917rem; outline: none; }
 .dialog input:focus { border-color: var(--accent); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 14px; }
+
+/* CEP 9/10 run Chromium < 84 and ignore flex `gap`. The editor adds a
+   `legacy-flex-gap` class in app.js; these margins keep the old hosts from
+   collapsing rows of controls into each other. */
+html.legacy-flex-gap .topbar { gap: 0; }
+html.legacy-flex-gap .topbar > * + * { margin-left: 16px; }
+html.legacy-flex-gap .brand-row { gap: 0; }
+html.legacy-flex-gap .brand-row > * + * { margin-left: 10px; }
+html.legacy-flex-gap .byline { gap: 0; }
+html.legacy-flex-gap .byline > * + * { margin-left: 8px; }
+html.legacy-flex-gap .top-actions { gap: 0; }
+html.legacy-flex-gap .top-actions > * + * { margin-left: 10px; }
+html.legacy-flex-gap .update-notice { gap: 0; }
+html.legacy-flex-gap .update-notice > * + * { margin-left: 10px; }
+html.legacy-flex-gap .debug-notice { gap: 0; }
+html.legacy-flex-gap .debug-notice > * + * { margin-left: 12px; }
+html.legacy-flex-gap .debug-actions { gap: 0; }
+html.legacy-flex-gap .debug-actions > * + * { margin-left: 8px; }
+html.legacy-flex-gap .nav-item { gap: 0; }
+html.legacy-flex-gap .nav-item > * + * { margin-left: 8px; }
+html.legacy-flex-gap .plugin-item { gap: 0; }
+html.legacy-flex-gap .plugin-item > * + * { margin-left: 6px; }
+html.legacy-flex-gap .side-footer { gap: 0; }
+html.legacy-flex-gap .side-footer > * + * { margin-left: 6px; }
+html.legacy-flex-gap .view { gap: 0; }
+html.legacy-flex-gap .view > * + * { margin-top: 10px; }
+html.legacy-flex-gap .view-head { gap: 0; }
+html.legacy-flex-gap .view-head > * + * { margin-left: 12px; }
+html.legacy-flex-gap .view-actions { gap: 0; }
+html.legacy-flex-gap .view-actions > * + * { margin-left: 7px; }
+html.legacy-flex-gap .view-actions > * { margin-bottom: 4px; }
+html.legacy-flex-gap .stat { gap: 0; }
+html.legacy-flex-gap .stat > * + * { margin-left: 6px; }
+html.legacy-flex-gap .table-toolbar { gap: 0; }
+html.legacy-flex-gap .table-toolbar > * + * { margin-left: 8px; }
+html.legacy-flex-gap .table-toolbar > * { margin-bottom: 4px; }
+html.legacy-flex-gap .pager { gap: 0; }
+html.legacy-flex-gap .pager > * + * { margin-left: 8px; }
+html.legacy-flex-gap .text-view-actions { gap: 0; }
+html.legacy-flex-gap .text-view-actions > * + * { margin-left: 7px; }
+html.legacy-flex-gap .card-actions { gap: 0; }
+html.legacy-flex-gap .card-actions > * + * { margin-left: 7px; }
+html.legacy-flex-gap .link-line { gap: 0; }
+html.legacy-flex-gap .link-line > * + * { margin-left: 8px; }
+html.legacy-flex-gap .about-files-head { gap: 0; }
+html.legacy-flex-gap .about-files-head > * + * { margin-left: 12px; }
+html.legacy-flex-gap .path-actions { gap: 0; }
+html.legacy-flex-gap .path-actions > * + * { margin-left: 5px; }
+html.legacy-flex-gap .export-toolbar { gap: 0; }
+html.legacy-flex-gap .export-toolbar > * + * { margin-left: 6px; }
+html.legacy-flex-gap .settings-card .export-item { gap: 0; }
+html.legacy-flex-gap .settings-card .export-item > * + * { margin-left: 8px; }
+html.legacy-flex-gap .check-line { gap: 0; }
+html.legacy-flex-gap .check-line > * + * { margin-left: 7px; }
+html.legacy-flex-gap .statusbar-inner { gap: 0; }
+html.legacy-flex-gap .statusbar-inner > * + * { margin-left: 12px; }
+html.legacy-flex-gap .dialog-actions { gap: 0; }
+html.legacy-flex-gap .dialog-actions > * + * { margin-left: 7px; }
+html.legacy-flex-gap .switch { gap: 0; }
+html.legacy-flex-gap .switch > .track { margin-left: 0; }
+html.legacy-flex-gap .switch > .switch-text { margin-left: 7px; }
+html.legacy-flex-gap .top-actions > .switch { gap: 0; }
+html.legacy-flex-gap .top-actions > .switch > .track { margin-left: 0; }
+html.legacy-flex-gap .top-actions > .switch > .switch-text { margin-left: 10px; }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: var(--line-2); }

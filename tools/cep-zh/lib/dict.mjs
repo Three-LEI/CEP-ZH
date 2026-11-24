@@ -103,9 +103,8 @@ export function buildConfigFor(dicts, { bundle, extId, port }) {
     if (!data || used.includes(data)) continue;
     used.push(data);
     usedFiles.push(...(data.files || []));
-    const cleared = !!data.cleared;
     for (const [source, value] of Object.entries(data.strings || {})) {
-      if (cleared && !value) delete merged[source];
+      // Empty plugin entries must not hide a valid common-dictionary fallback.
       if (value) merged[source] = value;
     }
     if (Array.isArray(data.patterns)) patterns.push(...data.patterns);

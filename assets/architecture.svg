@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#d27754"/>
+    </marker>
+    <marker id="arrowMuted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8c867c"/>
+    </marker>
+    <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.2" fill="#34322d"/>
+    </pattern>
+  </defs>
+
+  <rect width="1600" height="900" fill="#1b1b19"/>
+  <rect width="1600" height="900" fill="url(#dots)" opacity="0.55"/>
+
+  <text x="60" y="66" fill="#d27754" font-family="Consolas, 'Cascadia Mono', monospace" font-size="12" letter-spacing="2.4">ZY YU-CEP / ARCHITECTURE</text>
+  <text x="60" y="122" fill="#f5f2ea" font-family="'Microsoft YaHei UI','Microsoft YaHei','MiSans',sans-serif" font-size="44" font-weight="600">CEP 通用汉化原理</text>
+  <text x="60" y="157" fill="#a8a29a" font-family="'Microsoft YaHei UI','Microsoft YaHei','MiSans',sans-serif" font-size="16">不修改扩展源码 · 本地 CDP 注入 · 字典分层与空值回退</text>
+  <text x="1540" y="66" fill="#6f6a61" text-anchor="end" font-family="Consolas, monospace" font-size="12">v0.8.0</text>
+  <line x1="60" y1="190" x2="1540" y2="190" stroke="#3a3833"/>
+
+  <!-- Adobe host -->
+  <rect x="60" y="226" width="450" height="580" rx="12" fill="#222220" stroke="#4a4740"/>
+  <text x="88" y="258" fill="#d27754" font-family="Consolas, monospace" font-size="11" letter-spacing="1.8">ADOBE HOST</text>
+  <text x="88" y="290" fill="#f5f2ea" font-family="'Microsoft YaHei UI','Microsoft YaHei','MiSans',sans-serif" font-size="23" font-weight="600">Adobe 宿主应用</text>
+  <text x="88" y="315" fill="#8c867c" font-family="Consolas, monospace" font-size="12">AE · PS · PR · AI</text>
+
+  <rect x="88" y="340" width="394" height="54" rx="7" fill="#2a2926" stroke="#3d3a34"/>
+  <circle cx="108" cy="367" r="4" fill="#d27754"/>
+  <text x="122" y="363" fill="#d8d4cb" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="14">CEP 面板</text>
+  <text x="122" y="382" fill="#8c867c" font-family="Consolas, monospace" font-size="11">Chromium / CEF · HTML + CSS + JS</text>
+
+  <rect x="88" y="404" width="394" height="54" rx="7" fill="#2a2926" stroke="#3d3a34"/>
+  <circle cx="108" cy="431" r="4" fill="#d27754"/>
+  <text x="122" y="427" fill="#d8d4cb" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="14">CEP 面板</text>
+  <text x="122" y="446" fill="#8c867c" font-family="Consolas, monospace" font-size="11">同一套页面，不同 Adobe 宿主</text>
+
+  <rect x="88" y="478" width="394" height="264" rx="8" fill="#1e1e1c" stroke="#4a4740"/>
+  <text x="108" y="508" fill="#f5f2ea" font-family="Consolas, monospace" font-size="14" font-weight="600">CEP HTML Engine / DOM</text>
+  <text x="108" y="540" fill="#d27754" font-family="Consolas, monospace" font-size="18" font-weight="600">runtime.js</text>
+  <text x="108" y="568" fill="#a8a29a" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="13">扫描文本节点与 UI 属性</text>
+  <text x="108" y="596" fill="#a8a29a" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="13">MutationObserver 监听重绘</text>
+  <text x="108" y="624" fill="#a8a29a" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="13">只改 DOM，不改扩展文件</text>
+  <text x="108" y="666" fill="#6f6a61" font-family="Consolas, monospace" font-size="11">title · placeholder · aria-*</text>
+  <text x="108" y="686" fill="#6f6a61" font-family="Consolas, monospace" font-size="11">text nodes · iframes · shadow DOM</text>
+
+  <text x="88" y="778" fill="#8c867c" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="12">源码不变 · 可随时恢复原文</text>
+
+  <!-- agent -->
+  <rect x="560" y="226" width="420" height="310" rx="12" fill="#222220" stroke="#d27754"/>
+  <text x="584" y="258" fill="#d27754" font-family="Consolas, monospace" font-size="11" letter-spacing="1.8">CEP-ZH AGENT</text>
+  <text x="584" y="290" fill="#f5f2ea" font-family="'Microsoft YaHei UI','Microsoft YaHei','MiSans',sans-serif" font-size="23" font-weight="600">外部 Agent · Node.js</text>
+  <text x="584" y="316" fill="#8c867c" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="12">由隐藏 Agent 面板启动，独立进程运行。</text>
+
+  <circle cx="588" cy="352" r="3" fill="#d27754"/>
+  <text x="602" y="357" fill="#a8a29a" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="13">发现 .debug 调试端口</text>
+  <circle cx="588" cy="384" r="3" fill="#d27754"/>
+  <text x="602" y="389" fill="#a8a29a" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="13">通过 CDP WebSocket 连接面板</text>
+  <circle cx="588" cy="416" r="3" fill="#d27754"/>
+  <text x="602" y="421" fill="#a8a29a" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="13">注入 runtime.js</text>
+  <circle cx="588" cy="448" r="3" fill="#d27754"/>
+  <text x="602" y="453" fill="#a8a29a" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="13">按字典与开关实时更新</text>
+
+  <rect x="584" y="474" width="170" height="28" rx="4" fill="#1e1e1c" stroke="#3d3a34"/>
+  <text x="596" y="492" fill="#8c867c" font-family="Consolas, monospace" font-size="11">127.0.0.1 · loopback</text>
+  <rect x="766" y="474" width="190" height="28" rx="4" fill="#1e1e1c" stroke="#3d3a34"/>
+  <text x="778" y="492" fill="#8c867c" font-family="Consolas, monospace" font-size="11">CDP · .debug port</text>
+
+  <!-- manager -->
+  <rect x="560" y="575" width="420" height="231" rx="12" fill="#222220" stroke="#4a4740"/>
+  <text x="584" y="607" fill="#d27754" font-family="Consolas, monospace" font-size="11" letter-spacing="1.8">MANAGER</text>
+  <text x="584" y="639" fill="#f5f2ea" font-family="'Microsoft YaHei UI','Microsoft YaHei','MiSans',sans-serif" font-size="23" font-weight="600">管理器 · Modeless</text>
+  <text x="584" y="668" fill="#a8a29a" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="13">字典编辑 · 全局/单插件开关</text>
+  <text x="584" y="694" fill="#a8a29a" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="13">AI 翻译 · 导入导出 · 状态查看</text>
+  <rect x="584" y="720" width="126" height="30" rx="4" fill="#1e1e1c" stroke="#3d3a34"/>
+  <text x="598" y="740" fill="#8c867c" font-family="Consolas, monospace" font-size="11">表格视图</text>
+  <rect x="720" y="720" width="150" height="30" rx="4" fill="#1e1e1c" stroke="#3d3a34"/>
+  <text x="734" y="740" fill="#8c867c" font-family="Consolas, monospace" font-size="11">逐行文本</text>
+  <text x="584" y="780" fill="#6f6a61" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="11">写入本地 control / state / config，不经过网络。</text>
+
+  <!-- control files -->
+  <rect x="1030" y="226" width="500" height="170" rx="12" fill="#222220" stroke="#4a4740"/>
+  <text x="1054" y="258" fill="#d27754" font-family="Consolas, monospace" font-size="11" letter-spacing="1.8">CONTROL PLANE</text>
+  <text x="1054" y="290" fill="#f5f2ea" font-family="'Microsoft YaHei UI','Microsoft YaHei','MiSans',sans-serif" font-size="22" font-weight="600">本地控制面</text>
+  <text x="1054" y="315" fill="#8c867c" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="12">管理器写，Agent 读；全部在本机。</text>
+  <rect x="1054" y="334" width="140" height="32" rx="4" fill="#1e1e1c" stroke="#3d3a34"/>
+  <text x="1066" y="355" fill="#a8a29a" font-family="Consolas, monospace" font-size="11">control.json</text>
+  <rect x="1206" y="334" width="132" height="32" rx="4" fill="#1e1e1c" stroke="#3d3a34"/>
+  <text x="1218" y="355" fill="#a8a29a" font-family="Consolas, monospace" font-size="11">state.json</text>
+  <rect x="1350" y="334" width="140" height="32" rx="4" fill="#1e1e1c" stroke="#3d3a34"/>
+  <text x="1362" y="355" fill="#a8a29a" font-family="Consolas, monospace" font-size="11">config.json</text>
+
+  <!-- dictionaries -->
+  <rect x="1030" y="426" width="500" height="300" rx="12" fill="#222220" stroke="#4a4740"/>
+  <text x="1054" y="458" fill="#d27754" font-family="Consolas, monospace" font-size="11" letter-spacing="1.8">DICTIONARY</text>
+  <text x="1054" y="490" fill="#f5f2ea" font-family="'Microsoft YaHei UI','Microsoft YaHei','MiSans',sans-serif" font-size="22" font-weight="600">分层字典</text>
+
+  <rect x="1054" y="510" width="452" height="46" rx="5" fill="#2a2926" stroke="#3d3a34"/>
+  <text x="1068" y="531" fill="#f5f2ea" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="13">用户覆盖</text>
+  <text x="1068" y="547" fill="#6f6a61" font-family="Consolas, monospace" font-size="10">plugin override · 最高优先</text>
+  <rect x="1054" y="566" width="452" height="46" rx="5" fill="#2a2926" stroke="#3d3a34"/>
+  <text x="1068" y="587" fill="#f5f2ea" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="13">插件字典</text>
+  <text x="1068" y="603" fill="#6f6a61" font-family="Consolas, monospace" font-size="10">per-extension · 单个 CEP 插件</text>
+  <rect x="1054" y="622" width="452" height="46" rx="5" fill="#2a2926" stroke="#3d3a34"/>
+  <text x="1068" y="643" fill="#f5f2ea" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="13">公共字典</text>
+  <text x="1068" y="659" fill="#6f6a61" font-family="Consolas, monospace" font-size="10">global fallback · 空值回退</text>
+
+  <text x="1054" y="700" fill="#d27754" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="12">空值 → 公共字典 · 插件值优先</text>
+  <text x="1054" y="716" fill="#6f6a61" font-family="Consolas, monospace" font-size="10">runtime merges the layer before injection</text>
+
+  <!-- providers -->
+  <rect x="1030" y="756" width="500" height="70" rx="10" fill="#222220" stroke="#3d3a34"/>
+  <text x="1054" y="781" fill="#8c867c" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="13">可选翻译源</text>
+  <text x="1054" y="805" fill="#a8a29a" font-family="Consolas, monospace" font-size="11">Edge / Google / Yandex / OpenAI / DeepL / 网页 AI</text>
+
+  <!-- arrows -->
+  <line x1="510" y1="390" x2="554" y2="390" stroke="#d27754" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="516" y="379" fill="#d27754" font-family="Consolas, monospace" font-size="10">CDP</text>
+
+  <line x1="980" y1="310" x2="1024" y2="310" stroke="#8c867c" stroke-width="1.2" stroke-dasharray="5 5" marker-end="url(#arrowMuted)"/>
+  <text x="986" y="299" fill="#8c867c" font-family="Consolas, monospace" font-size="10">轮询/监听</text>
+
+  <path d="M 1280 756 V 736 H 980 V 540" fill="none" stroke="#8c867c" stroke-width="1.1" stroke-dasharray="4 4" marker-end="url(#arrowMuted)"/>
+  <text x="1000" y="728" fill="#8c867c" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="10">AI 翻译（可选）</text>
+
+  <text x="60" y="866" fill="#6f6a61" font-family="Consolas, monospace" font-size="11">LOCAL ONLY · NO SOURCE PATCH · RUNTIME INJECTION · FALLBACK DICTIONARIES</text>
+  <text x="1540" y="866" fill="#6f6a61" text-anchor="end" font-family="'Microsoft YaHei UI','Microsoft YaHei',sans-serif" font-size="11">ZyYu-CEP通用汉化管理</text>
+</svg>

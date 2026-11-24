@@ -47,6 +47,12 @@
     "Create": "创建",
     "New": "新建",
     "Load": "加载",
+    "Amount": "数量",
+    "Color": "颜色",
+    "Details": "详情",
+    "Ease": "缓动",
+    "EaseIn": "缓入",
+    "EaseOut": "缓出",
     "Details…": "详情…",
     "default": "默认"
   }

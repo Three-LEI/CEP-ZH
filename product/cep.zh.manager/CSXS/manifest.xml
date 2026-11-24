@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ExtensionManifest Version="7.0" ExtensionBundleId="cep.zh.manager" ExtensionBundleVersion="0.7.2"
-    ExtensionBundleName="CEP 汉化管理器" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<ExtensionManifest Version="7.0" ExtensionBundleId="cep.zh.manager" ExtensionBundleVersion="0.8.0"
+    ExtensionBundleName="ZyYu-CEP通用汉化管理" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
-    <Extension Id="cep.zh.manager.panel.v4" Version="0.7.2" />
-    <Extension Id="cep.zh.agent" Version="0.7.2" />
+    <Extension Id="cep.zh.manager.panel.v4" Version="0.8.0" />
+    <Extension Id="cep.zh.agent" Version="0.8.0" />
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>
@@ -35,15 +35,15 @@
         </Lifecycle>
         <UI>
           <Type>Modeless</Type>
-          <Menu>CEP 汉化管理</Menu>
+          <Menu>ZyYu-CEP通用汉化管理</Menu>
           <Geometry>
             <Size>
               <Height>800</Height>
               <Width>1200</Width>
             </Size>
             <MinSize>
-              <Height>200</Height>
-              <Width>150</Width>
+              <Height>1</Height>
+              <Width>1</Width>
             </MinSize>
             <MaxSize>
               <Height>1000</Height>

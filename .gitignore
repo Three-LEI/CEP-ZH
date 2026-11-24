@@ -1,6 +1,14 @@
 # Local research notes and archived screenshots
 docs/
 tools/bootstrap/research/
+.tmp-release-body*.md
+gude-*.log
+tools/bootstrap/*.h
+tools/bootstrap/*.c
+tools/bootstrap/*.dll
+tools/bootstrap/*.exe
+tools/bootstrap/*.py
+tools/release/*.der
 
 # MiSans is embedded in local builds but is not redistributed as standalone
 # font files in this public repository. Run tools/fonts/extract_misans.py.

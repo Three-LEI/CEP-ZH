@@ -1,1 +1,1 @@
-﻿String(app.findMenuCommandId('CEP 汉化管理'));
+String(app.findMenuCommandId('ZyYu-CEP通用汉化管理'));

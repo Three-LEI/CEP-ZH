@@ -1,6 +1,16 @@
-/* CEP 汉化管理器 - modern editor prototype (no build step). */
+/* ZyYu-CEP通用汉化管理 - modern editor prototype (no build step). */
 (function () {
   'use strict';
+
+  // CEP 9/10 ship Chromium < 84, where flexbox `gap` is silently ignored.
+  // Mark those hosts so the stylesheet can fall back to child margins.
+  var chromeMajor = (function () {
+    var m = /Chrome\/(\d+)/i.exec(navigator.userAgent || '');
+    return m ? parseInt(m[1], 10) : 0;
+  })();
+  if (chromeMajor > 0 && chromeMajor < 84) {
+    document.documentElement.classList.add('legacy-flex-gap');
+  }
 
   var host = window.__adobe_cep__;
   var FS = (window.cep && window.cep.fs) || null;
@@ -21,6 +31,24 @@
   var CONFIG = BASE + '/config.json';
   var GITHUB_URL = 'https://github.com/Three-LEI/CEP-ZH';
   var BILI_URL = 'https://space.bilibili.com/353544977';
+  var WEB_TRANSLATE_PROMPT = [
+    '你是一名专业的软件 UI 本地化翻译。下面我会粘贴若干行 CEP 面板文本，每行格式严格为：',
+    '',
+    '原文=译文',
+    '',
+    '请把每一行“=”左侧的英文 UI 原文翻译成简体中文，并填写到“=”右侧。',
+    '',
+    '规则：',
+    '1. 只返回与输入相同行数的“原文=译文”，不要解释、不要 Markdown 代码块、不要编号。',
+    '2. 保留每行第一个“=”作为分隔符；原文或译文中已有的“=”继续保留。',
+    '3. 保留占位符、快捷键、URL、文件路径、数字、标点、括号、前缀和后缀。',
+    '4. 短标签和混合标签也要翻译，例如 Amount: -> 数量：, Color 1 -> 颜色 1, EaseOut( -> 缓出(。',
+    '5. 如果右侧已有中文，保留或改成更自然的中文，不要删除。',
+    '6. 如果某行确实无法翻译，输出原文=原文。',
+    '7. 不要合并或拆分行，不要添加输入之外的额外行。',
+    '',
+    '下面开始：'
+  ].join('\n');
   var APP_VERSION = (function () {
     var el = document.querySelector('.version');
     return (el && el.textContent ? el.textContent : '0.3.0').replace(/^v/i, '').trim();
@@ -45,6 +73,8 @@
     globalSearch: '',
     page: 1,
     pageSize: 50,
+    tableMode: 'table',
+    lineDirty: false,
     globalFilter: 'all',
     globalPage: 1,
     lastDictJson: '',
@@ -57,6 +87,8 @@
     importOverwrite: false,
     translationRunning: false,
     lastTranslationSeen: '',
+    apiTesting: false,
+    apiTestToken: '',
     debugDismissed: '',
     debugSig: '',
     repairToken: '',
@@ -95,7 +127,7 @@
     if (!FS) return fallback;
     var r = FS.readFile(p);
     if (r.err !== 0 || !r.data) return fallback;
-    try { return JSON.parse(r.data); } catch (e) { return fallback; }
+    try { return JSON.parse(String(r.data).replace(/^\uFEFF/, '')); } catch (e) { return fallback; }
   }
   function writeJson(p, obj) {
     if (!FS) { toast('cep.fs 不可用'); return false; }
@@ -165,7 +197,6 @@
   function pluginEntries(key) {
     var p = loadPlugin(key);
     var common = S.common.strings;
-    var cleared = !!p.user.cleared;
     var keys = new Set();
     Object.keys(p.user.strings || {}).forEach(function (k) { keys.add(k); });
     Object.keys(p.bundled.strings || {}).forEach(function (k) { keys.add(k); });
@@ -176,8 +207,10 @@
       var uv = hasUser ? (p.user.strings[orig] || '') : '';
       var bv = p.bundled.strings[orig] || '';
       var cv = common[orig] || '';
-      var tr = uv ? uv : (cleared ? '' : (bv || cv || ''));
-      var status = uv ? 'plugin' : (cleared ? 'untranslated' : (bv ? 'builtin' : (cv ? 'common' : 'untranslated')));
+      // An empty plugin value falls back to the built-in/common dictionary;
+      // the runtime uses the same precedence.
+      var tr = uv ? uv : (bv || cv || '');
+      var status = uv ? 'plugin' : (bv ? 'builtin' : (cv ? 'common' : 'untranslated'));
       out.push({ orig: orig, tr: tr, uv: uv, bv: bv, cv: cv, status: status });
     });
     out.sort(function (a, b) {
@@ -510,6 +543,7 @@
   /* ---------------- sidebar / views ---------------- */
 
   function switchView(view) {
+    if (view !== 'plugin') flushLineView();
     S.view = view;
     Array.prototype.forEach.call(document.querySelectorAll('.nav-item'), function (b) {
       b.classList.toggle('active', b.getAttribute('data-view') === view);
@@ -528,6 +562,7 @@
   }
 
   function selectPlugin(key) {
+    flushLineView();
     S.key = key;
     S.page = 1;
     S.filter = 'all';
@@ -591,7 +626,6 @@
     return entries.filter(function (e) {
       if (S.filter === 'untranslated' && e.status !== 'untranslated') return false;
       if (S.filter === 'translated' && !(e.status === 'plugin' || e.status === 'builtin')) return false;
-      if (S.filter === 'common' && e.status !== 'common') return false;
       if (!q) return true;
       return e.orig.toLowerCase().indexOf(q) >= 0 || (e.tr || '').toLowerCase().indexOf(q) >= 0;
     });
@@ -609,12 +643,147 @@
     });
   }
 
+  /* ---------------- table / line text views ---------------- */
+
+  var lineSaveTimer = null;
+
+  function encodeLineValue(value) {
+    return String(value == null ? '' : value).replace(/\r?\n/g, '\\n');
+  }
+
+  function decodeLineValue(value) {
+    return String(value == null ? '' : value).replace(/\\n/g, '\n');
+  }
+
+  function entriesToLines(list) {
+    return list.map(function (e) {
+      return encodeLineValue(e.orig) + '=' + encodeLineValue(e.tr);
+    }).join('\n');
+  }
+
+  function parseLineView(text, list) {
+    var known = {};
+    list.forEach(function (e) { known[e.orig] = e; });
+    var updates = [];
+    String(text || '').split(/\r?\n/).forEach(function (line) {
+      var idx = line.indexOf('=');
+      if (idx < 0) return;
+      var orig = decodeLineValue(line.slice(0, idx).trim());
+      var tr = decodeLineValue(line.slice(idx + 1).trim());
+      if (!Object.prototype.hasOwnProperty.call(known, orig)) return;
+      updates.push({ orig: orig, tr: tr, entry: known[orig] });
+    });
+    return updates;
+  }
+
+  function renderPluginStats() {
+    if (!S.key) return;
+    var st = pluginStats(S.key);
+    $('pluginStats').innerHTML =
+      '<div class="stat"><b>' + st.total + '</b><span>总词条</span></div>' +
+      '<div class="stat ok"><b>' + st.translated + '</b><span>已翻译</span></div>' +
+      '<div class="stat warn"><b>' + st.common + '</b><span>公共回退</span></div>' +
+      '<div class="stat bad"><b>' + st.untranslated + '</b><span>未翻译</span></div>';
+  }
+
+  function applyLineView(showToast) {
+    if (S.tableMode !== 'lines' || !S.key) return 0;
+    var list = filteredEntries(pluginEntries(S.key));
+    var updates = parseLineView($('pluginTextEditor').value, list);
+    var p = loadPlugin(S.key);
+    if (!p.user.strings) p.user.strings = {};
+    var changed = 0;
+    updates.forEach(function (u) {
+      // Compare with what is currently shown (including built-in/common
+      // fallback), so pressing Apply without edits never copies fallback
+      // values into the plugin dictionary.
+      if (u.tr === u.entry.tr) return;
+      p.user.strings[u.orig] = u.tr;
+      changed++;
+    });
+    if (changed) {
+      writeJson(EXT + '/' + S.key + '.json', p.user);
+      S.sig = '';
+      renderPlugins();
+      renderPluginStats();
+    }
+    S.lineDirty = false;
+    if (showToast) toast(changed ? '已应用 ' + changed + ' 条修改' : '没有需要应用的修改');
+    return changed;
+  }
+
+  function flushLineView() {
+    if (S.tableMode === 'lines' && S.lineDirty) {
+      clearTimeout(lineSaveTimer);
+      applyLineView(false);
+    }
+  }
+
+  function updateViewModeUI() {
+    Array.prototype.forEach.call(document.querySelectorAll('#viewModeSeg button'), function (b) {
+      b.classList.toggle('active', b.getAttribute('data-viewmode') === S.tableMode);
+    });
+  }
+
+  function setTableMode(mode) {
+    if (mode !== 'lines') mode = 'table';
+    if (mode === S.tableMode) return;
+    flushLineView();
+    S.tableMode = mode;
+    S.page = 1;
+    updateViewModeUI();
+    renderPlugin();
+  }
+
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', 'readonly');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  function copyText(text, okMessage) {
+    function ok() { toast(okMessage || '已复制'); }
+    function fail() { toast('复制失败，请手动选中文本复制', 3000); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok).catch(function () {
+        if (fallbackCopy(text)) ok(); else fail();
+      });
+    } else if (fallbackCopy(text)) {
+      ok();
+    } else {
+      fail();
+    }
+  }
+
+  function renderLineView(list) {
+    updateViewModeUI();
+    $('pluginTableScroll').classList.add('hidden');
+    $('pluginEmpty').classList.add('hidden');
+    $('pluginPager').classList.add('hidden');
+    $('pluginTextView').classList.remove('hidden');
+    if (!S.lineDirty) $('pluginTextEditor').value = entriesToLines(list);
+    $('tableInfo').textContent = list.length + ' 条 · 逐行文本（不分页）';
+    updateTranslationUI();
+  }
+
   function renderPlugin() {
     if (!S.key) {
       $('dictSearch').value = S.search;
       $('pluginTitle').textContent = '选择一个插件';
       $('pluginMeta').textContent = '左侧选择插件，或打开一个 CEP 面板后点击“捕获已打开插件”。';
       $('pluginRows').innerHTML = '';
+      $('pluginTableScroll').classList.remove('hidden');
+      $('pluginTextView').classList.add('hidden');
+      $('pluginPager').classList.remove('hidden');
       $('pluginEmpty').classList.remove('hidden');
       $('pluginEmpty').textContent = '还没有选择插件';
       $('pluginStats').innerHTML = '';
@@ -626,19 +795,23 @@
     $('dictSearch').value = S.search;
     var p = loadPlugin(S.key);
     var entries = pluginEntries(S.key);
-    var stats = pluginStats(S.key);
     var disabled = S.control.disabledPlugins.indexOf(S.key) >= 0 ||
       (S.agent && Array.isArray(S.agent.panels) && S.agent.panels.some(function (x) { return sanitizeKey(x.bundleId) === S.key && x.disabled; }));
     $('pluginTitle').textContent = p.name || S.key;
-    $('pluginMeta').textContent = S.key + ' · ' + entries.length + ' 条词条 · 插件字典优先于公共字典';
+    $('pluginMeta').textContent = S.key + ' · ' + entries.length + ' 条词条 · 右上角开关仅控制当前插件';
     $('pluginToggle').checked = !disabled;
-    $('pluginStats').innerHTML =
-      '<div class="stat"><b>' + stats.total + '</b><span>总词条</span></div>' +
-      '<div class="stat ok"><b>' + stats.translated + '</b><span>已翻译</span></div>' +
-      '<div class="stat warn"><b>' + stats.common + '</b><span>公共回退</span></div>' +
-      '<div class="stat bad"><b>' + stats.untranslated + '</b><span>未翻译</span></div>';
+    renderPluginStats();
 
     var list = filteredEntries(entries);
+    if (S.tableMode === 'lines') {
+      renderLineView(list);
+      return;
+    }
+
+    $('pluginTableScroll').classList.remove('hidden');
+    $('pluginTextView').classList.add('hidden');
+    $('pluginPager').classList.remove('hidden');
+    updateViewModeUI();
     var page = Math.min(S.page, Math.max(1, Math.ceil(list.length / S.pageSize)));
     S.page = page;
     var slice = list.slice((page - 1) * S.pageSize, page * S.pageSize);
@@ -783,6 +956,13 @@
 
   /* ---------------- settings / agent ---------------- */
 
+  function updateApiTestUI() {
+    var btn = $('btnTestApi');
+    if (!btn) return;
+    btn.disabled = !!S.apiTesting || !!S.translationRunning;
+    btn.textContent = S.apiTesting ? '测试中…' : '测试连接';
+  }
+
   function updateTranslationUI() {
     var running = !!S.translationRunning;
     if ($('btnAi')) {
@@ -800,6 +980,7 @@
       clear.disabled = running || !S.key || count === 0;
       clear.textContent = '清空译文';
     }
+    updateApiTestUI();
   }
 
   function requestTranslate(scope) {
@@ -824,6 +1005,87 @@
     toast(scope === 'all' ? '已请求 AI 翻译全部字典' : '已请求 AI 翻译当前插件', 2600);
     setTimeout(refreshAgent, 300);
     setTimeout(refreshAgent, 1200);
+  }
+
+  function testApiConnection() {
+    if (S.apiTesting) return;
+    if (S.translationRunning) { toast('翻译任务进行中，请稍后再测试'); return; }
+    if (!agentFresh()) { toast('Agent 未运行，请先打开 Adobe 并等待 Agent 启动', 5000); return; }
+    if (S.apiDirty) saveSettings();
+    var cfg = readJson(CONFIG, {});
+    if (!cfg.provider || cfg.provider === 'none') {
+      toast('请先选择并保存翻译 API', 3000);
+      switchView('settings');
+      return;
+    }
+    var token = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+    var current = readJson(CONTROL, {});
+    current.testApiTask = { token: token, requestedAt: Date.now() };
+    if (!writeJson(CONTROL, current)) { toast('写入测试任务失败', 4000); return; }
+    S.apiTestToken = token;
+    S.apiTesting = true;
+    updateApiTestUI();
+    toast('正在测试 API 连接…', 2200);
+    setTimeout(refreshAgent, 400);
+    setTimeout(refreshAgent, 1500);
+    setTimeout(function () {
+      if (S.apiTestToken !== token) return;
+      S.apiTestToken = '';
+      S.apiTesting = false;
+      updateApiTestUI();
+      toast('测试超时：Agent 未返回结果，请确认 Agent 正在运行', 6000);
+    }, 25000);
+  }
+
+  function looksTranslatableText(s) {
+    if (typeof s !== 'string') return false;
+    var k = s.replace(/\s+/g, ' ').trim();
+    if (!k || k.length > 240) return false;
+    if (!/[A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u024F]/.test(k)) return false;
+    if (/[{}]/.test(k)) return false;
+    if (/(?:fill|stroke|font-size|font-family|background|opacity|color|margin|padding|display)\s*:/i.test(k)) return false;
+    if (/^(?:https?|file):\/\//i.test(k)) return false;
+    if (/^[\d\s.,+\-:/%()]+$/.test(k)) return false;
+    return true;
+  }
+
+  function translateAllInfo() {
+    var keys = pluginKeys();
+    var plugins = 0;
+    var entries = 0;
+    var chars = 0;
+    keys.forEach(function (key) {
+      var count = 0;
+      pluginEntries(key).forEach(function (e) {
+        // Common-fallback entries can still be translated into the plugin
+        // dictionary after 0.7.9, so include them in the warning estimate.
+        if ((e.status !== 'untranslated' && e.status !== 'common') || !looksTranslatableText(e.orig)) return;
+        count++;
+        entries++;
+        chars += e.orig.length;
+      });
+      if (count) plugins++;
+    });
+    return { plugins: plugins, entries: entries, chars: chars };
+  }
+
+  function openTranslateAllConfirm() {
+    if (S.translationRunning) { toast('已有翻译任务在运行'); return; }
+    var cfg = readJson(CONFIG, {});
+    if (!cfg.provider || cfg.provider === 'none') {
+      toast('请先在设置里配置翻译 API', 2600);
+      switchView('settings');
+      return;
+    }
+    var info = translateAllInfo();
+    if (!info.entries) {
+      toast('全部插件都没有需要翻译的未翻译词条', 3200);
+      return;
+    }
+    $('translateAllSummary').textContent =
+      '将处理 ' + info.plugins + ' 个插件，共 ' + info.entries + ' 条未翻译词条（约 ' + info.chars + ' 个字符）。';
+    var dialog = $('translateAllDialog');
+    if (dialog && !dialog.open) dialog.showModal();
   }
 
   function ensureSelectedExports(keys) {
@@ -1107,7 +1369,9 @@
       if (tr.error) {
         toast('AI 翻译失败：' + tr.error, 6000);
       } else {
-        toast('AI 翻译完成：+' + (tr.translated || 0) + ' 条，跳过 ' + (tr.skipped || 0) + ' 条', 4200);
+        var unchanged = tr.unchanged || 0;
+        var note = unchanged ? ('，' + unchanged + ' 条同原文未写入') : '';
+        toast('AI 翻译完成：+' + (tr.translated || 0) + ' 条，跳过 ' + (tr.skipped || 0) + ' 条' + note, 5200);
         S.sig = '';
         setTimeout(function () {
           loadCommon();
@@ -1115,6 +1379,20 @@
           if (S.view === 'plugin') renderPlugin();
           else if (S.view === 'global') renderGlobal();
         }, 260);
+      }
+    }
+    var test = S.agent && S.agent.apiTest;
+    if (S.apiTestToken && test && test.token === S.apiTestToken && test.status !== 'running') {
+      var testToken = S.apiTestToken;
+      S.apiTestToken = '';
+      S.apiTesting = false;
+      updateApiTestUI();
+      if (test.status === 'ok') toast('API ' + test.message, 6000);
+      else toast('API 连接失败：' + test.message, 7000);
+      var testCtl = readJson(CONTROL, {});
+      if (testCtl.testApiTask && testCtl.testApiTask.token === testToken) {
+        delete testCtl.testApiTask;
+        writeJson(CONTROL, testCtl);
       }
     }
     var rep = S.agent && S.agent.lastRepair;
@@ -1285,6 +1563,7 @@
       renderPlugins();
     };
     $('dictSearch').oninput = function () {
+      flushLineView();
       S.search = this.value;
       S.page = 1;
       renderPlugin();
@@ -1358,7 +1637,13 @@
     $('btnClearPlugin').onclick = clearPluginTranslations;
     $('btnAddCommon').onclick = function () { openAdd('global'); };
     $('btnAi').onclick = function () { requestTranslate('plugin'); };
-    $('btnTranslateAll').onclick = function () { requestTranslate('all'); };
+    $('btnTranslateAll').onclick = openTranslateAllConfirm;
+    $('translateAllCancel').onclick = function () { $('translateAllDialog').close(); };
+    $('translateAllConfirm').onclick = function () {
+      $('translateAllDialog').close();
+      requestTranslate('all');
+    };
+    $('btnTestApi').onclick = testApiConnection;
     $('btnExport').onclick = exportDictionaries;
     $('btnExportAll').onclick = function () {
       S.exportSelected = new Set(pluginKeys());
@@ -1382,11 +1667,33 @@
 
     Array.prototype.forEach.call(document.querySelectorAll('#filterSeg button'), function (b) {
       b.onclick = function () {
+        flushLineView();
         S.filter = b.getAttribute('data-filter'); S.page = 1;
         Array.prototype.forEach.call(document.querySelectorAll('#filterSeg button'), function (x) { x.classList.toggle('active', x === b); });
         renderPlugin();
       };
     });
+    Array.prototype.forEach.call(document.querySelectorAll('#viewModeSeg button'), function (b) {
+      b.onclick = function () { setTableMode(b.getAttribute('data-viewmode')); };
+    });
+    $('pluginTextEditor').oninput = function () {
+      S.lineDirty = true;
+      clearTimeout(lineSaveTimer);
+      lineSaveTimer = setTimeout(function () { applyLineView(false); }, 800);
+    };
+    $('pluginTextEditor').onblur = function () {
+      if (S.lineDirty) applyLineView(false);
+    };
+    $('btnApplyTextView').onclick = function () {
+      clearTimeout(lineSaveTimer);
+      applyLineView(true);
+    };
+    $('btnCopyTextView').onclick = function () {
+      copyText($('pluginTextEditor').value, '已复制逐行文本');
+    };
+    $('btnCopyPrompt').onclick = function () {
+      copyText(WEB_TRANSLATE_PROMPT, '已复制网页端翻译提示词');
+    };
     Array.prototype.forEach.call(document.querySelectorAll('#globalFilterSeg button'), function (b) {
       b.onclick = function () {
         S.globalFilter = b.getAttribute('data-filter'); S.globalPage = 1;

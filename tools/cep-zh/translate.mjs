@@ -87,13 +87,23 @@ function collectStrings(catalog) {
   return [...set].filter((s) => /[A-Za-z\u00C0-\u024F]/.test(s) && !/[\u4e00-\u9fff]/.test(s));
 }
 
-async function translateOpenAI(cfg, strings) {
+function sameText(a, b) {
+  return String(a == null ? '' : a).trim().toLowerCase() === String(b == null ? '' : b).trim().toLowerCase();
+}
+
+function openAiSystem(cfg, retry) {
+  let system = 'You are a professional software UI localizer. Translate every given UI string to ' +
+    (cfg.targetLang || 'zh-CN') + '. ' +
+    'Translate short labels and mixed labels as well; for example, "X LocalStore" should become "X 本地存储". ' +
+    'Keep placeholders, shortcuts, URLs, file paths and code identifiers unchanged, but do not return an entire string unchanged unless it is only a product name or a code symbol. ' +
+    'Return ONLY a JSON object of the form {"translations":{"original":"translation"}}.';
+  if (retry) system += ' The previous response copied these strings unchanged. Translate them now; do not echo the source.';
+  return system;
+}
+
+async function requestOpenAI(cfg, strings, retry) {
   const base = (cfg.baseUrl || '').replace(/\/+$/, '');
   const url = /\/chat\/completions$/.test(base) ? base : base + '/chat/completions';
-  const system = 'You are a professional software UI localizer. Translate the given English UI strings to ' +
-    (cfg.targetLang || 'zh-CN') +
-    '. Keep placeholders, shortcuts, product names, and technical identifiers unchanged. ' +
-    'Return ONLY a JSON object of the form {"translations":{"original":"translation"}}.';
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (cfg.apiKey || '') },
@@ -101,7 +111,7 @@ async function translateOpenAI(cfg, strings) {
       model: cfg.model || 'gpt-4o-mini',
       temperature: 0,
       messages: [
-        { role: 'system', content: system },
+        { role: 'system', content: openAiSystem(cfg, retry) },
         { role: 'user', content: JSON.stringify({ strings }) },
       ],
       response_format: { type: 'json_object' },
@@ -112,6 +122,19 @@ async function translateOpenAI(cfg, strings) {
   const text = data.choices?.[0]?.message?.content || '{}';
   const parsed = JSON.parse(text);
   return parsed.translations || parsed;
+}
+
+async function translateOpenAI(cfg, strings) {
+  const out = await requestOpenAI(cfg, strings, false);
+  const copied = strings.filter((s) => out[s] && sameText(out[s], s));
+  if (!copied.length) return out;
+  try {
+    const retry = await requestOpenAI(cfg, copied, true);
+    for (const s of copied) {
+      if (retry[s] && !sameText(retry[s], s)) out[s] = retry[s];
+    }
+  } catch {}
+  return out;
 }
 
 async function translateDeepL(cfg, strings) {
@@ -166,12 +189,16 @@ async function main() {
   const todo = strings.filter((s) => !cache[keyBase + s]);
   console.log(`cache hit ${strings.length - todo.length}, request ${todo.length}`);
   let fresh = {};
+  let unchanged = 0;
   if (todo.length) {
     if (cfg.provider === 'openai') fresh = await translateOpenAI(cfg, todo);
     else if (cfg.provider === 'deepl') fresh = await translateDeepL(cfg, todo);
     else if (cfg.provider === 'mock') fresh = translateMock(todo);
     else throw new Error('unknown provider: ' + cfg.provider);
-    for (const [s, t] of Object.entries(fresh)) cache[keyBase + s] = t;
+    for (const [s, t] of Object.entries(fresh)) {
+      if (sameText(t, s)) { unchanged++; continue; }
+      cache[keyBase + s] = t;
+    }
     saveCache(cache);
   }
 
@@ -182,8 +209,10 @@ async function main() {
   };
   for (const s of strings) {
     const t = cache[keyBase + s];
-    if (t) dict.strings[s] = t;
+    if (t && !sameText(t, s)) dict.strings[s] = t;
+    else if (t) unchanged++;
   }
+  if (unchanged) console.log(`unchanged ${unchanged} (not written)`);
   const out = args.out || path.join(dictDir(), 'extensions', bundle + '.auto.json');
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, JSON.stringify(dict, null, 2), 'utf8');

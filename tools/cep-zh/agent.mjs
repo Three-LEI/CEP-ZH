@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process';
 import { scanExtensions, detectInstalledHosts } from './lib/scan.mjs';
 import { buildPortIndex, discoverLivePanels, resolveLiveTarget } from './lib/live.mjs';
 import { loadDictionaries, buildConfigFor, dictionaryRoots } from './lib/dict.mjs';
-import { attach, reinject, evaluateOn } from './lib/inject.mjs';
+import { attach, reinject, evaluateOn, readStats } from './lib/inject.mjs';
 import { listTargets, connect, evaluate } from './lib/cdp.mjs';
 import { EXTRACT_EXPR, mergeCatalog, saveCatalog, catalogPathFor } from './lib/catalog.mjs';
 import { isTranslatable, loadTranslationConfig, translateStrings } from './lib/translate-api.mjs';
@@ -59,6 +59,8 @@ let controlBusy = false;
 let controlTimer = null;
 let translationRunning = false;
 let lastTranslationToken = '';
+let lastTestToken = '';
+let apiTest = null;
 let lastRepairToken = '';
 let lastRepair = null;
 let lastAutoDebug = null;
@@ -66,7 +68,7 @@ let autoDebugRepairing = false;
 const autoDebugAttempted = new Set();
 let translation = {
   running: false, token: '', scope: '', bundleId: '',
-  total: 0, done: 0, translated: 0, skipped: 0,
+  total: 0, done: 0, translated: 0, skipped: 0, unchanged: 0,
   error: '', startedAt: '', finishedAt: '',
 };
 
@@ -74,12 +76,17 @@ function readControl() {
   try {
     const j = JSON.parse(fs.readFileSync(CONTROL_PATH, 'utf8').replace(/^\uFEFF/, ''));
     const t = j.translationTask;
+    const test = j.testApiTask;
     return {
       enabled: j.enabled !== false,
       disabledPlugins: Array.isArray(j.disabledPlugins) ? j.disabledPlugins.map(String) : [],
       collectToken: j.collectToken ? String(j.collectToken) : '',
       repairDebugToken: j.repairDebugToken ? String(j.repairDebugToken) : '',
       repairDebugRequestedAt: Number(j.repairDebugRequestedAt) || 0,
+      testApiTask: test && test.token ? {
+        token: String(test.token),
+        requestedAt: Number(test.requestedAt) || 0,
+      } : null,
       translationTask: t && t.token ? {
         token: String(t.token),
         scope: t.scope === 'all' ? 'all' : 'plugin',
@@ -87,7 +94,7 @@ function readControl() {
       } : null,
     };
   } catch {
-    return { enabled: true, disabledPlugins: [], collectToken: '', repairDebugToken: '', repairDebugRequestedAt: 0, translationTask: null };
+    return { enabled: true, disabledPlugins: [], collectToken: '', repairDebugToken: '', repairDebugRequestedAt: 0, testApiTask: null, translationTask: null };
   }
 }
 
@@ -184,6 +191,7 @@ function writeState(panels) {
       disabledPlugins: control.disabledPlugins,
       lastCollect,
       translation,
+      apiTest,
       pendingDebug: pendingDebug(),
       lastRepair,
       lastAutoDebug,
@@ -203,6 +211,8 @@ async function offSession(session) {
     }
     await evaluateOn(session, 'window.__CEP_ZH__ && window.__CEP_ZH__.off ? (window.__CEP_ZH__.off(), true) : true');
   } catch {}
+  // Keep the manager's status in sync with the panel's actual state.
+  try { session.stats = await readStats(session.client); } catch {}
 }
 
 async function applyControl() {
@@ -257,11 +267,10 @@ function translationCandidates(keys) {
     if (!Array.isArray(user.patterns)) user.patterns = [];
     const record = dicts.byKey.get(key) || dicts.byKey.get(key.toLowerCase());
     const existing = record?.strings || {};
-    const common = dicts.global.strings || {};
     const todo = [];
     const candidates = new Set([...Object.keys(user.strings), ...Object.keys(existing)]);
     for (const s of candidates) {
-      if (user.strings[s] || existing[s] || common[s]) { skipped++; continue; }
+      if (user.strings[s] || existing[s]) { skipped++; continue; }
       if (!isTranslatable(s)) { skipped++; continue; }
       todo.push(s);
       all.add(s);
@@ -276,7 +285,7 @@ async function runTranslationTask(task) {
   translationRunning = true;
   translation = {
     running: true, token: task.token, scope: task.scope, bundleId: task.bundleId,
-    total: 0, done: 0, translated: 0, skipped: 0,
+    total: 0, done: 0, translated: 0, skipped: 0, unchanged: 0,
     error: '', startedAt: new Date().toISOString(), finishedAt: '',
   };
   writeState(panelState(lastLive));
@@ -302,10 +311,18 @@ async function runTranslationTask(task) {
       },
     });
     let translated = 0;
+    let unchanged = 0;
     for (const item of perKey) {
       let changed = false;
       for (const s of item.todo) {
-        if (map[s]) { item.user.strings[s] = map[s]; translated++; changed = true; }
+        if (!map[s]) continue;
+        if (String(map[s]).trim().toLowerCase() === String(s).trim().toLowerCase()) {
+          unchanged++;
+          continue;
+        }
+        item.user.strings[s] = map[s];
+        translated++;
+        changed = true;
       }
       if (changed) {
         item.user.name = item.user.name || item.key;
@@ -313,7 +330,8 @@ async function runTranslationTask(task) {
       }
     }
     translation.translated = translated;
-    log(`[translate] done translated=${translated} skipped=${skipped}`);
+    translation.unchanged = unchanged;
+    log(`[translate] done translated=${translated} skipped=${skipped} unchanged=${unchanged}`);
   } catch (err) {
     translation.error = err.message;
     log('[translate] error:', err.message);
@@ -323,6 +341,44 @@ async function runTranslationTask(task) {
     translationRunning = false;
     writeState(panelState(lastLive));
     dicts = loadDictionaries();
+  }
+}
+
+async function runApiTestTask(task) {
+  if (translationRunning) {
+    apiTest = {
+      token: task.token, status: 'error', message: '翻译任务进行中，请稍后再测试',
+      provider: '', model: '', at: new Date().toISOString(),
+    };
+    writeState(panelState(lastLive));
+    return;
+  }
+  let cfg = {};
+  apiTest = {
+    token: task.token, status: 'running', message: '正在请求翻译 API…',
+    provider: '', model: '', at: new Date().toISOString(),
+  };
+  writeState(panelState(lastLive));
+  try {
+    cfg = loadTranslationConfig();
+    if (!cfg.provider || cfg.provider === 'none') throw new Error('翻译 API 未配置');
+    const sample = 'Test connection';
+    const map = await translateStrings(cfg, [sample], {});
+    const text = map[sample];
+    if (!text) throw new Error('API 返回空翻译');
+    apiTest = {
+      token: task.token, status: 'ok', message: '连接成功：' + String(text).slice(0, 80),
+      provider: cfg.provider, model: cfg.model || '', at: new Date().toISOString(),
+    };
+    log(`[test] ok provider=${cfg.provider}`);
+  } catch (err) {
+    apiTest = {
+      token: task.token, status: 'error', message: err.message,
+      provider: cfg.provider || '', model: cfg.model || '', at: new Date().toISOString(),
+    };
+    log('[test] error:', err.message);
+  } finally {
+    writeState(panelState(lastLive));
   }
 }
 
@@ -341,6 +397,10 @@ async function syncControl() {
       if (!translationRunning) {
         runTranslationTask(control.translationTask).catch((err) => log('[translate] failed', err.message));
       }
+    }
+    if (control.testApiTask && control.testApiTask.token !== lastTestToken) {
+      lastTestToken = control.testApiTask.token;
+      runApiTestTask(control.testApiTask).catch((err) => log('[test] failed', err.message));
     }
     if (control.repairDebugToken && control.repairDebugToken !== lastRepairToken) {
       lastRepairToken = control.repairDebugToken;

@@ -14,17 +14,62 @@
   var CFG = window.__CEP_ZH_CONFIG__ || {};
   var VERSION = '1.0.0';
   var dict = CFG.dict || {};
+  var lowerDict = {};
   var patterns = [];
+
+  for (var dk in dict) {
+    if (!Object.prototype.hasOwnProperty.call(dict, dk) || !dict[dk]) continue;
+    var lk = dk.toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(lowerDict, lk)) lowerDict[lk] = dict[dk];
+  }
 
   (CFG.patterns || []).forEach(function (p) {
     try { patterns.push({ re: new RegExp(p.re, p.flags || ''), to: p.to }); } catch (e) { /* ignore bad rule */ }
   });
 
-  function lookup(key) {
+  function exactLookup(key) {
     if (!key) return null;
     if (Object.prototype.hasOwnProperty.call(dict, key) && dict[key]) return dict[key];
+    var lower = key.toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(lowerDict, lower)) return lowerDict[lower];
+    return null;
+  }
+
+  function lookup(key) {
+    if (!key) return null;
+    var direct = exactLookup(key);
+    if (direct) return direct;
     var compact = key.replace(/\s+/g, ' ').trim();
-    if (compact !== key && Object.prototype.hasOwnProperty.call(dict, compact) && dict[compact]) return dict[compact];
+    if (compact !== key) {
+      direct = exactLookup(compact);
+      if (direct) return direct;
+    }
+
+    // Recognize UI variants around a known base term:
+    // "Amount:" -> Amount + ":", "Color 1" -> Color + " 1",
+    // "EaseOut(" -> easeOut + "(".
+    var base = compact;
+    var suffix = '';
+    for (var pass = 0; pass < 3; pass++) {
+      var punct = /([\s:：()\[\]（），,。.;；…]+)$/.exec(base);
+      if (punct) {
+        suffix = punct[1] + suffix;
+        base = base.slice(0, -punct[1].length).trim();
+        continue;
+      }
+      var ending = /(\s+\d+)$/.exec(base);
+      if (ending) {
+        suffix = ending[1] + suffix;
+        base = base.slice(0, -ending[1].length).trim();
+        continue;
+      }
+      break;
+    }
+    if (base && base !== compact) {
+      direct = exactLookup(base);
+      if (direct) return direct + suffix.replace(/:/g, '：');
+    }
+
     for (var i = 0; i < patterns.length; i++) {
       var p = patterns[i];
       p.re.lastIndex = 0;
