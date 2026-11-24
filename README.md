@@ -33,14 +33,14 @@ CEP 面板本质上是运行在 Adobe 宿主中的 Chromium 页面。项目不�
 - 表格视图 / 逐行文本视图；逐行文本可多选复制到网页 AI
 - 字典热更新、运行时开关
 - 可选翻译源：Edge、Google、Yandex、OpenAI 兼容接口、DeepL
-- 支持 CEP 9–12，兼容 Adobe 2020 及以上版本
+- 支持 CEP 9–12，兼容 Adobe 2019 或更新版本
 
 ## 兼容范围
 
-- **支持：** Adobe 2020 或更新版本（After Effects / Photoshop / Premiere Pro / Illustrator 等 CEP 面板）
-- **不支持：** Adobe 2019 及更早版本
+- **支持：** Adobe 2019 或更新版本（After Effects / Photoshop / Premiere Pro / Illustrator 等 CEP 面板；CEP 9–12）
 - Windows 10 / 11
 - 管理面板是独立 Modeless 窗口，不参与宿主停靠面板组
+- Adobe 2019 使用 CEP 9；旧版布局与 CDP 兼容已处理
 
 ## 安装
 
@@ -66,7 +66,7 @@ CEP 面板本质上是运行在 Adobe 宿主中的 Chromium 页面。项目不�
 - `全局汉化`：控制全部插件
 - `仅该插件汉化`：只控制当前选中的插件
 - `表格`：逐条编辑，分页显示
-- `逐行文本`：全部词条放入一个文本框，每行 `原文=译文`；可复制到网页 AI
+- `逐行文本`：当前筛选结果全部词条放入一个文本框，每行 `原文=译文`；可复制到网页 AI
 - `复制网页端提示词`：复制预置的网页翻译提示词
 
 API Key 获取、配置和测试步骤见：
