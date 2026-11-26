@@ -26,6 +26,15 @@ export function listCepProcessIds() {
 export function listCepListeningPorts() {
   const pids = new Set(listCepProcessIds());
   if (!pids.size) return [];
+  return listLoopbackListeningPorts().filter((l) => pids.has(l.pid));
+}
+
+/**
+ * Every loopback TCP listener, without the tasklist filter. `netstat` alone is
+ * ~10x cheaper than tasklist+netstat, which lets the Agent notice a panel that
+ * just opened within a fraction of a second.
+ */
+export function listLoopbackListeningPorts() {
   let out;
   try {
     out = execFileSync('netstat', ['-ano'], { encoding: 'utf8', windowsHide: true, timeout: 10000 });
@@ -36,15 +45,13 @@ export function listCepListeningPorts() {
   for (const line of out.split(/\r?\n/)) {
     const cols = line.trim().split(/\s+/);
     if (cols.length < 5 || !/^TCP/i.test(cols[0])) continue;
-    const state = cols[3];
-    if (!/^LISTEN/i.test(state)) continue;
+    if (!/^LISTEN/i.test(cols[3])) continue;
     const local = cols[1];
     const m = /^(.*):(\d+)$/.exec(local);
     if (!m) continue;
     const address = m[1];
     const port = Number(m[2]);
     const pid = Number(cols[4]);
-    if (!pids.has(pid)) continue;
     if (!['127.0.0.1', '[::1]', '::1'].includes(address)) continue;
     result.push({ port, pid, address });
   }

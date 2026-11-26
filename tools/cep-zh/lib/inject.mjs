@@ -1,4 +1,4 @@
-// Build and inject the cep-zh runtime over Chrome DevTools Protocol.
+﻿// Build and inject the cep-zh runtime over Chrome DevTools Protocol.
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { listTargets, connect, evaluate } from './cdp.mjs';
@@ -28,6 +28,7 @@ export async function attach(port, config, { timeout = 900 } = {}) {
   try {
     await client.send('Page.enable');
   } catch { /* older CEP builds may not implement Page.enable */ }
+  await enableActivityBinding(client);
 
   const source = buildSource(config);
   try {
@@ -38,6 +39,22 @@ export async function attach(port, config, { timeout = 900 } = {}) {
   await evaluate(client, source);
   const stats = await readStats(client);
   return { port, client, page, source, identifier, config, stats };
+}
+
+/**
+ * Install the Runtime binding the runtime uses to push activity hints. When the
+ * host rejects it, everything still works via the Agent's 1 s stats polling.
+ */
+export async function enableActivityBinding(client) {
+  try {
+    await client.send('Runtime.enable');
+  } catch { /* legacy host */ }
+  try {
+    await client.send('Runtime.addBinding', { name: '__cepZhActivity' });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function readStats(client) {

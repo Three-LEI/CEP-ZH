@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN" data-theme="dark">
 <head>
   <meta charset="utf-8" />
@@ -82,8 +82,30 @@
         <div id="pluginList" class="plugin-list"></div>
       </div>
 
+      <div class="auto-switches">
+        <label class="switch small" title="焦点、可见性、路由或页面标签切换时自动捕获新词条">
+          <input type="checkbox" id="autoCaptureToggle" />
+          <span class="track"><span class="thumb"></span></span>
+          <span class="switch-text">自动捕获</span>
+        </label>
+        <label class="switch small" title="捕获到新词条后自动调用设置里的翻译接口，会消耗接口额度">
+          <input type="checkbox" id="autoTranslateToggle" />
+          <span class="track"><span class="thumb"></span></span>
+          <span class="switch-text">自动翻译</span>
+        </label>
+        <label class="switch small" title="自动捕获只作用于左侧当前选中的插件，其他面板不捕获">
+          <input type="checkbox" id="captureSelectedToggle" />
+          <span class="track"><span class="thumb"></span></span>
+          <span class="switch-text">仅当前插件</span>
+        </label>
+        <label class="switch small" title="只捕获面板当前可见区域，滚动到新内容时再补捕">
+          <input type="checkbox" id="captureViewportToggle" />
+          <span class="track"><span class="thumb"></span></span>
+          <span class="switch-text">仅视口</span>
+        </label>
+      </div>
       <div class="side-footer">
-        <button id="btnCollect" class="btn primary wide">捕获已打开插件</button>
+        <button id="btnCollect" class="btn primary wide" title="立即扫描所有已打开插件">捕获全部</button>
         <button id="btnRefresh" class="btn icon" title="刷新">↻</button>
       </div>
       <button id="btnTranslateAll" class="btn ai-all" title="翻译所有插件字典中尚未翻译的词条">AI 翻译全部字典</button>
@@ -95,7 +117,7 @@
           <div class="view-title">
             <div class="eyebrow">PLUGIN DICTIONARY</div>
             <h2 id="pluginTitle">选择一个插件</h2>
-            <p id="pluginMeta">左侧选择插件，或打开 CEP 面板后点击“捕获已打开插件”。</p>
+            <p id="pluginMeta">左侧选择插件，或打开 CEP 面板后点击“捕获全部”。</p>
           </div>
           <div class="view-actions">
             <label class="switch small" title="只开启/停用当前选中的插件，不影响其他插件">
@@ -106,6 +128,8 @@
             <button id="btnAdd" class="btn">＋ 添加词条</button>
             <button id="btnAi" class="btn" title="翻译当前插件中尚未翻译的词条">AI 翻译</button>
             <button id="btnClearPlugin" class="btn danger" title="清空当前插件的本机用户译文，内置字典仍保留">清空译文</button>
+            <button id="btnClearEntries" class="btn danger" title="删除当前插件本机字典里的全部词条、译文和自定义规则，内置字典不受影响">清空词条</button>
+            <button id="btnMaintain" class="btn" title="清理接口原样返回、永远无法翻译的空词条，并合并重复词条">整理词典</button>
           </div>
         </div>
 

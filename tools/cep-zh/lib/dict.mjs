@@ -18,7 +18,9 @@ export function dictionaryRoots() {
 
 function readJson(file) {
   try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
+    // Editors on Windows often save UTF-8 with a BOM; JSON.parse rejects it and
+    // the whole dictionary would silently look empty (and then be overwritten).
+    return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
   } catch (err) {
     if (fs.existsSync(file)) console.warn('[dict] cannot read', file, '-', err.message);
     return null;

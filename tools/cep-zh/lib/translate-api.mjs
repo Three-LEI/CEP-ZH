@@ -13,6 +13,15 @@ export function loadTranslationConfig() {
   return cfg;
 }
 
+/** True for text that is already Chinese, even when it carries a short Latin token. */
+export function isCjkHeavy(s) {
+  const k = String(s == null ? '' : s);
+  const han = (k.match(/[\u3400-\u4DBF\u4E00-\u9FFF]/g) || []).length;
+  if (han < 2) return false;
+  const latin = (k.match(/[A-Za-z]/g) || []).length;
+  return latin <= Math.max(2, Math.floor(han / 2));
+}
+
 /** True only for strings that actually contain translatable Latin text. */
 export function isTranslatable(s) {
   if (typeof s !== 'string') return false;
@@ -20,6 +29,8 @@ export function isTranslatable(s) {
   if (!k || k.length > 240) return false;
   // Pure Chinese, pure numbers, pure symbols and punctuation are skipped.
   if (!/[A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u024F]/.test(k)) return false;
+  // Chinese text with only a kaomoji/brand token ("...曲线OwO") is skipped too.
+  if (isCjkHeavy(k)) return false;
   if (/[{}]/.test(k)) return false;
   if (/(?:fill|stroke|font-size|font-family|background|opacity|color|margin|padding|display)\s*:/i.test(k)) return false;
   if (/^(?:https?|file):\/\//i.test(k)) return false;

@@ -557,6 +557,8 @@ body.micro .compact-note {
 .plugin-item .pcount { font: 0.75rem/1 var(--mono); color: var(--faint); }
 .plugin-item .pbadge { font: 0.708rem/1 var(--mono); color: var(--accent); }
 .side-footer { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-2); }
+.auto-switches { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; align-self: flex-start; }
+html.legacy-flex-gap .auto-switches > * + * { margin-left: 10px; }
 .ai-all { width: 100%; margin-top: 6px; font-size: 0.833rem; }
 .ai-all.running { border-color: var(--accent); color: var(--accent); }
 
