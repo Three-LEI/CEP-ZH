@@ -48,7 +48,12 @@ New-Item -ItemType Directory -Force $stage | Out-Null
 
 function Copy-Selected([string]$source, [string]$target, [string[]]$exclude) {
     New-Item -ItemType Directory -Force $target | Out-Null
-    Get-ChildItem $source -Force | Where-Object { $exclude -notcontains $_.Name } | ForEach-Object {
+    Get-ChildItem $source -Force | Where-Object {
+        $exclude -notcontains $_.Name -and
+        $_.Name -notlike '.*tmpdir' -and
+        $_.Name -notlike '*.tmp' -and
+        $_.Name -ne 'cache'
+    } | ForEach-Object {
         Copy-Item $_.FullName (Join-Path $target $_.Name) -Recurse -Force
     }
 }

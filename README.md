@@ -6,7 +6,7 @@ Adobe CEP 面板通用汉化方案：**不修改扩展源码**，通过本地调
   <img src="assets/architecture.png" alt="CEP 通用汉化流程图：打开面板 → Agent 发现 .debug 端口 → CDP 注入 runtime.js → 按分层字典替换文案 → 界面实时变中文" width="100%">
 </p>
 
-<p align="center"><sub>从上到下五步就是一次汉化的全过程：点开插件 → Agent 自动接入 → 注入运行时 → 字典替换 → 界面变中文。<br>CDP 指 Chrome DevTools Protocol，连接只走本机 127.0.0.1；词条来自“用户覆盖 > 插件字典 > 公共字典”，空值自动回退。</sub></p>
+<p align="center"><sub>一次汉化的完整流程：打开面板 → Agent 接入 → 注入运行时 → 字典替换 → 界面变中文。<br>CDP 指 Chrome DevTools Protocol，连接只走本机 127.0.0.1；词条来自“用户覆盖 > 插件字典 > 公共字典”，空值自动回退。</sub></p>
 
 ## 原理
 

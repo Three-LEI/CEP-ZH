@@ -24,7 +24,7 @@ using Microsoft::WRL::ComPtr;
 namespace
 {
 constexpr wchar_t kWindowClass[] = L"CEP.ZH.Installer.Window";
-constexpr wchar_t kWindowTitle[] = L"CEP 汉化管理器 · 安装器 v0.8.0";
+constexpr wchar_t kWindowTitle[] = L"CEP 汉化管理器 · 安装器 v0.9.0";
 constexpr int kWidth = 760;
 constexpr int kHeight = 570;
 constexpr UINT kMsgUpdate = WM_APP + 1;
