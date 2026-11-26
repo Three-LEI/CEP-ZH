@@ -38,7 +38,8 @@ CEP 面板本质上是运行在 Adobe 宿主中的 Chromium 页面。项目不�
 ## 兼容范围
 
 - **支持：** Adobe 2019 或更新版本（After Effects / Photoshop / Premiere Pro / Illustrator 等 CEP 面板；CEP 9–12）
-- Windows 10 / 11
+- **Windows：** Windows 10 / 11
+- **不支持：** Windows 7、Windows 8 / 8.1。安装器使用 Node.js 22，Adobe 2019 的视频应用也官方要求 Windows 10 及以上
 - 管理面板是独立 Modeless 窗口，不参与宿主停靠面板组
 - Adobe 2019 使用 CEP 9；旧版布局与 CDP 兼容已处理
 

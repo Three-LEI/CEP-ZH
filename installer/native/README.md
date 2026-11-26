@@ -5,6 +5,8 @@
 ## 兼容
 
 - Adobe 2019 及以上
+- Windows 10 / 11
+- 不支持 Windows 7、Windows 8 / 8.1
 - CEP 9–12：统一使用官方 `.debug` 调试端口，已有 `.debug` 的插件保留
 - 不再修改 Adobe 安装目录，不安装 `VCRUNTIME140_1.dll` 代理
 
