@@ -485,6 +485,39 @@ function translationKeys(task) {
   }
 }
 
+/**
+ * Some providers echo product-like labels ("Spectracam 03") unchanged even when
+ * their siblings were translated ("Spectracam 01" -> "光谱相机 01"). When the
+ * label differs only by its trailing number, reuse the sibling's translated
+ * prefix instead of asking the API again.
+ */
+function inferNumericSibling(word, maps) {
+  const m = /^(.*?)(\d{1,4})\s*$/.exec(String(word));
+  if (!m) return '';
+  const prefix = m[1].trim();
+  const digits = m[2];
+  if (prefix.length < 2) return '';
+  const norm = prefix.toLowerCase();
+  for (const map of maps) {
+    for (const [key, value] of Object.entries(map || {})) {
+      if (!value) continue;
+      const k = /^(.*?)(\d{1,4})\s*$/.exec(String(key));
+      if (!k) continue;
+      if (k[1].trim().toLowerCase() !== norm) continue;
+      if (k[2] === digits) continue;
+      const text = String(value);
+      const at = text.lastIndexOf(k[2]);
+      if (at < 0) continue;
+      const head = text.slice(0, at);
+      if (!head.trim()) continue;
+      // If the sibling itself was not translated, inference would be pointless.
+      if (head.trim().toLowerCase() === k[1].trim().toLowerCase()) continue;
+      return head + digits + text.slice(at + k[2].length);
+    }
+  }
+  return '';
+}
+
 function translationCandidates(keys, skipMap) {
   const perKey = [];
   const all = new Set();
@@ -497,16 +530,26 @@ function translationCandidates(keys, skipMap) {
     const record = dicts.byKey.get(key) || dicts.byKey.get(key.toLowerCase());
     const existing = record?.strings || {};
     const todo = [];
+    let inferred = 0;
     const skip = skipMap ? skipMap.get(key) : null;
     const candidates = new Set([...Object.keys(user.strings), ...Object.keys(existing)]);
     for (const s of candidates) {
-      if (skip && skip.has(s)) { skipped++; continue; }
       if (user.strings[s] || existing[s]) { skipped++; continue; }
       if (!isTranslatable(s)) { skipped++; continue; }
+      const sibling = inferNumericSibling(s, [existing, user.strings]);
+      if (sibling) {
+        user.strings[s] = sibling;
+        inferred++;
+        if (Array.isArray(user.unchanged)) {
+          user.unchanged = user.unchanged.filter((w) => w !== s);
+        }
+        continue;
+      }
+      if (skip && skip.has(s)) { skipped++; continue; }
       todo.push(s);
       all.add(s);
     }
-    if (todo.length) perKey.push({ key, user, todo });
+    if (todo.length || inferred) perKey.push({ key, user, todo, inferred });
   }
   return { perKey, strings: [...all], skipped };
 }
@@ -519,11 +562,17 @@ function translationCandidates(keys, skipMap) {
 function applyTranslationMap(perKey, map, { isAuto = false } = {}) {
   let translated = 0;
   let unchanged = 0;
+  let inferred = 0;
   const changedKeys = [];
   for (const item of perKey) {
     let changed = false;
     let listChanged = false;
     const unchangedSet = new Set(Array.isArray(item.user.unchanged) ? item.user.unchanged.map(String) : []);
+    if (item.inferred) {
+      // translationCandidates already filled these from a translated sibling.
+      inferred += item.inferred;
+      changed = true;
+    }
     for (const s of item.todo) {
       if (!map[s]) continue;
       if (String(map[s]).trim().toLowerCase() === String(s).trim().toLowerCase()) {
@@ -546,7 +595,7 @@ function applyTranslationMap(perKey, map, { isAuto = false } = {}) {
       changedKeys.push(item.key);
     }
   }
-  return { translated, unchanged, changedKeys };
+  return { translated, unchanged, changedKeys, inferred };
 }
 
 async function runTranslationTask(task) {
@@ -575,7 +624,11 @@ async function runTranslationTask(task) {
     translation.skipped = skipped;
     writeState(panelState(lastLive));
     if (!strings.length) {
-      log('[translate] nothing to translate');
+      // Nothing left to ask the API, but sibling inference may still have filled
+      // entries that the model kept echoing unchanged.
+      const applied = applyTranslationMap(perKey, {}, { isAuto });
+      translation.translated = applied.inferred;
+      log(`[translate] done inferred=${applied.inferred} skipped=${skipped}${isAuto ? ' auto=true' : ''}`);
       return;
     }
     const map = await translateStrings(cfg, strings, {
@@ -586,9 +639,9 @@ async function runTranslationTask(task) {
       },
     });
     const applied = applyTranslationMap(perKey, map, { isAuto });
-    translation.translated = applied.translated;
+    translation.translated = applied.translated + applied.inferred;
     translation.unchanged = applied.unchanged;
-    log(`[translate] done translated=${applied.translated} skipped=${skipped} unchanged=${applied.unchanged}${isAuto ? ' auto=true' : ''}`);
+    log(`[translate] done translated=${applied.translated} inferred=${applied.inferred} skipped=${skipped} unchanged=${applied.unchanged}${isAuto ? ' auto=true' : ''}`);
   } catch (err) {
     translation.error = err.message;
     log('[translate] error:', err.message);
@@ -720,7 +773,9 @@ async function runAutoTranslateBatch(keys) {
     translation.skipped = skipped;
     writeState(panelState(lastLive));
     if (!strings.length) {
-      log('[translate] nothing to translate (auto)');
+      const applied = applyTranslationMap(perKey, {}, { isAuto: true });
+      translation.translated = applied.inferred;
+      log(`[translate] done auto inferred=${applied.inferred} skipped=${skipped}`);
     } else {
       const map = await translateStrings(cfg, strings, {
         onProgress(done, total) {
@@ -730,9 +785,9 @@ async function runAutoTranslateBatch(keys) {
         },
       });
       const applied = applyTranslationMap(perKey, map, { isAuto: true });
-      translation.translated = applied.translated;
+      translation.translated = applied.translated + applied.inferred;
       translation.unchanged = applied.unchanged;
-      log(`[translate] done auto bundles=${cleanKeys.length} translated=${applied.translated} skipped=${skipped} unchanged=${applied.unchanged}`);
+      log(`[translate] done auto bundles=${cleanKeys.length} translated=${applied.translated} inferred=${applied.inferred} skipped=${skipped} unchanged=${applied.unchanged}`);
     }
   } catch (err) {
     translation.error = err.message;
@@ -817,6 +872,8 @@ function maintainDictionary(key) {
   for (const word of Object.keys(user.strings)) {
     if (user.strings[word]) continue;
     if (!unchanged.has(word)) continue;
+    // Keep labels that a translated sibling can still fill.
+    if (inferNumericSibling(word, [user.strings])) continue;
     delete user.strings[word];
     unchanged.delete(word);
     removedEmpty++;
