@@ -7,7 +7,6 @@
 #include <windows.h>
 #include <wincrypt.h>
 #include <winver.h>
-#include <tlhelp32.h>
 #include <winhttp.h>
 #include <shellapi.h>
 #include <shlobj.h>
@@ -47,6 +46,7 @@ const wchar_t* kNodeUrls[] = {
     L"https://nodejs.org/dist/v22.14.0/node-v22.14.0-win-x64.zip",
 };
 const wchar_t* kNodeLabels[] = { L"npmmirror", L"清华镜像", L"阿里云镜像", L"Node.js 官方" };
+constexpr wchar_t kNodeVersion[] = L"22.14.0";
 constexpr wchar_t kNodeSha256[] = L"55b639295920b219bb2acbcfa00f90393a2789095b7323f79475c9f34795f217";
 constexpr wchar_t kHosts[] = L"AEFT,PHXS,PPRO,ILST,IDSN,FLPR,AUDT,DRWV";
 const wchar_t* kRepoUrls[] = {
@@ -520,6 +520,27 @@ std::wstring FindSystemNode()
     return std::wstring();
 }
 
+std::wstring BundledNodeRoot()
+{
+    return JoinPath(KnownFolder(FOLDERID_LocalAppData), L"CEP-ZH\\node");
+}
+
+std::wstring FindBundledNode()
+{
+    const std::wstring root = BundledNodeRoot();
+    if (!DirectoryExists(root)) return std::wstring();
+    return FindNodeInTree(root);
+}
+
+bool NodeRunsExpectedVersion(const std::wstring& node)
+{
+    DWORD exitCode = 0;
+    std::wstring output;
+    std::wstring error;
+    if (!RunProcessCapture(node, { L"--version" }, std::wstring(), exitCode, output, error)) return false;
+    return exitCode == 0 && output.find(L"v22.14.0") != std::wstring::npos;
+}
+
 std::wstring EnvPath(const wchar_t* name)
 {
     wchar_t buffer[MAX_PATH * 2] = {};
@@ -641,27 +662,12 @@ bool IsOurProxy(const std::wstring& path)
     return text.find("cep-zh CEP engine proxy") != std::string::npos;
 }
 
-bool AdobeAppRunning()
+bool IsOurEngineProxy(const std::wstring& path)
 {
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snapshot == INVALID_HANDLE_VALUE) return false;
-    const wchar_t* names[] = {
-        L"AfterFX.exe", L"Photoshop.exe", L"Illustrator.exe",
-        L"Adobe Premiere Pro.exe", L"InDesign.exe", L"Animate.exe",
-    };
-    PROCESSENTRY32W entry{};
-    entry.dwSize = sizeof(entry);
-    bool found = false;
-    if (Process32FirstW(snapshot, &entry)) {
-        do {
-            for (const wchar_t* name : names) {
-                if (_wcsicmp(entry.szExeFile, name) == 0) { found = true; break; }
-            }
-            if (found) break;
-        } while (Process32NextW(snapshot, &entry));
-    }
-    CloseHandle(snapshot);
-    return found;
+    std::vector<uint8_t> bytes;
+    if (!ReadBinaryFile(path, bytes)) return false;
+    const std::string text(bytes.begin(), bytes.end());
+    return text.find("cep-zh CEP engine proxy") != std::string::npos;
 }
 
 std::vector<std::wstring> CepEngineDirs()
@@ -686,36 +692,6 @@ std::vector<std::wstring> CepEngineDirs()
     std::sort(dirs.begin(), dirs.end());
     dirs.erase(std::unique(dirs.begin(), dirs.end()), dirs.end());
     return dirs;
-}
-
-int InstallEngineProxy(const std::wstring& repoRoot, std::deque<std::wstring>& logs)
-{
-    const std::wstring source = JoinPath(JoinPath(JoinPath(JoinPath(repoRoot, L"tools"), L"bootstrap"), L"dist"),
-        L"VCRUNTIME140_1.dll");
-    if (!FileExists(source)) {
-        logs.push_back(L"未找到 CEP12 引擎代理，跳过全局代理");
-        return 0;
-    }
-    if (AdobeAppRunning()) {
-        logs.push_back(L"检测到 Adobe 应用正在运行，暂不替换引擎代理；关闭应用后重试");
-        return 0;
-    }
-
-    int installed = 0;
-    for (const auto& dir : CepEngineDirs()) {
-        const std::wstring engine = JoinPath(dir, L"CEPHtmlEngine.exe");
-        if (EngineMajor(engine) < 12) continue;
-        const std::wstring target = JoinPath(dir, L"VCRUNTIME140_1.dll");
-        const std::wstring backup = target + L".cepzh-orig";
-        if (FileExists(target) && !IsOurProxy(target) && !FileExists(backup))
-            CopyFileSimple(target, backup);
-        if (CopyFileSimple(source, target)) ++installed;
-    }
-    if (installed)
-        logs.push_back(L"CEP12 引擎代理已安装：" + std::to_wstring(installed) + L" 个（后续新插件自动生效）");
-    else
-        logs.push_back(L"没有可安装代理的 CEP12 引擎");
-    return installed;
 }
 
 int RestoreEngineProxy(std::deque<std::wstring>& logs)
@@ -880,9 +856,6 @@ bool RunInstaller(const UiPublish& publish)
 
     Trace(L"BEGIN");
     apply();
-    if (AdobeAppRunning()) {
-        return fail(L"请先关闭所有 Adobe 应用后再安装/更新");
-    }
 
     const std::wstring tempRoot = JoinPath(TempDirectory(),
         L"CEP-ZH-installer-" + std::to_wstring(GetCurrentProcessId()) + L"-" +
@@ -890,11 +863,27 @@ bool RunInstaller(const UiPublish& publish)
     if (!EnsureDirectory(tempRoot)) return fail(L"无法创建临时目录");
 
     // 1. Node runtime ---------------------------------------------------------
-    std::wstring node = FindSystemNode();
-    if (node.empty()) {
-        step1 = L"下载 Node.js 运行时";
-        status = L"未检测到 Node.js，正在下载便携运行时…";
-        log(L"未检测到 Node.js 18+，下载 Node.js 22.14.0");
+    // Always use the installer-managed portable Node.js. A system Node may be
+    // missing, too old, or too new; it is never used for the Agent.
+    const std::wstring nodeRoot = BundledNodeRoot();
+    const std::wstring nodeMarker = JoinPath(nodeRoot, L"node-version.txt");
+    std::wstring nodeVersion;
+    std::wstring node = FindBundledNode();
+    bool nodeReady = !node.empty() && ReadTextFile(nodeMarker, nodeVersion) &&
+        nodeVersion.find(kNodeVersion) != std::wstring::npos;
+    if (!nodeReady && !node.empty()) {
+        // Upgrade from an installer that predates node-version.txt. Do not
+        // replace a portable Node that is currently in use; verify it first.
+        log(L"检查已有自带 Node.js 版本…");
+        if (NodeRunsExpectedVersion(node)) {
+            nodeReady = true;
+            if (!WriteTextFile(nodeMarker, kNodeVersion)) log(L"警告：无法写入 Node 版本标记");
+        }
+    }
+    if (!nodeReady) {
+        step1 = L"安装自带 Node.js 运行时";
+        status = L"正在安装自带的 Node.js 22.14.0…";
+        log(L"使用安装器自带的 Node.js 22.14.0；不读取系统 Node");
         apply();
 
         const std::wstring nodeZip = JoinPath(tempRoot, L"node.zip");
@@ -928,7 +917,6 @@ bool RunInstaller(const UiPublish& publish)
         }
         if (!nodeDownloaded) return fail(L"下载或校验 Node.js 失败：" + downloadError);
 
-        const std::wstring nodeRoot = JoinPath(KnownFolder(FOLDERID_LocalAppData), L"CEP-ZH\\node");
         RemoveTree(nodeRoot);
         if (!EnsureDirectory(nodeRoot)) return fail(L"无法创建 Node 目录");
         step1 = L"解压 Node.js 运行时";
@@ -938,9 +926,10 @@ bool RunInstaller(const UiPublish& publish)
             return fail(L"解压 Node.js 失败：" + downloadError);
         node = FindNodeInTree(nodeRoot);
         if (node.empty()) return fail(L"解压后没有找到 node.exe");
-        log(L"Node.js: " + node);
+        if (!WriteTextFile(nodeMarker, kNodeVersion)) log(L"警告：无法写入 Node 版本标记");
+        log(L"自带 Node.js: " + node);
     } else {
-        log(L"Node.js: " + node);
+        log(std::wstring(L"使用自带 Node.js ") + kNodeVersion + L": " + node);
     }
     progress = std::max(progress, 30);
     step1 = L"下载 CEP 汉化文件";
@@ -1166,7 +1155,9 @@ bool RunUninstall(const UiPublish& publish)
     const std::wstring cli = JoinPath(agentTools, L"cli.mjs");
 
     // Restore/remove generated .debug files before the Agent disappears.
-    const std::wstring node = FindSystemNode();
+    // Prefer the portable Node installed with the product.
+    std::wstring node = FindBundledNode();
+    if (node.empty()) node = FindSystemNode();
     if (node.empty()) {
         log(L"未找到 Node.js，跳过 .debug 还原");
     } else if (!FileExists(cli)) {
