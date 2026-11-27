@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN" data-theme="dark">
 <head>
   <meta charset="utf-8" />
@@ -151,6 +151,17 @@
               <input id="dictSearch" type="search" placeholder="搜索原文或译文" autocomplete="off" />
             </div>
             <div class="table-info" id="tableInfo"></div>
+          </div>
+          <div id="translateOverlay" class="translate-overlay hidden" role="status" aria-live="polite">
+            <div class="to-head">
+              <span class="to-spinner" aria-hidden="true"></span>
+              <div class="to-titles">
+                <strong id="toTitle">AI 翻译中</strong>
+                <span id="toSub">准备中…</span>
+              </div>
+            </div>
+            <div class="to-bar"><span id="toFill"></span></div>
+            <div class="to-stats"><span id="toStatA"></span><span id="toStatB"></span></div>
           </div>
           <div class="table-scroll" id="pluginTableScroll">
             <table>

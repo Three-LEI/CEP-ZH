@@ -1,4 +1,4 @@
-/* MiSans is embedded under the MiSans font license (free commercial use,
+﻿/* MiSans is embedded under the MiSans font license (free commercial use,
    embedding allowed; attribution required). Official files, no modification. */
 @font-face {
   font-family: "MiSans";
@@ -1045,3 +1045,53 @@ html.legacy-flex-gap .top-actions > .switch > .switch-text { margin-left: 10px; 
   .canvas .h1 { top: 64px; }
   body { overflow: auto; }
 }
+
+/* AI translation progress overlay, floating over the entry table. */
+.translate-overlay {
+  position: absolute;
+  bottom: 54px;
+  right: 18px;
+  z-index: 6;
+  width: 320px;
+  max-width: calc(100% - 36px);
+  padding: 12px 14px 11px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+.translate-overlay .to-head { display: flex; align-items: center; gap: 10px; }
+.translate-overlay .to-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.translate-overlay .to-titles strong { font-size: 13px; font-weight: 600; color: var(--fg); }
+.translate-overlay .to-titles span { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.translate-overlay .to-spinner {
+  width: 14px; height: 14px; flex: none;
+  border: 2px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: to-spin 0.8s linear infinite;
+}
+@keyframes to-spin { to { transform: rotate(360deg); } }
+.translate-overlay .to-bar {
+  height: 6px; margin: 10px 0 8px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.translate-overlay #toFill {
+  display: block; height: 100%; width: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.35s ease;
+}
+.translate-overlay.is-indeterminate #toFill { width: 38% !important; animation: to-slide 1.15s ease-in-out infinite; }
+@keyframes to-slide { 0% { margin-left: -38%; } 100% { margin-left: 100%; } }
+.translate-overlay .to-stats { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; color: var(--muted); }
+.translate-overlay.is-done { border-color: var(--ok); }
+.translate-overlay.is-done #toFill { background: var(--ok); }
+.translate-overlay.is-done .to-spinner { display: none; }
+.translate-overlay.is-error { border-color: var(--warn); }
+.translate-overlay.is-error #toFill { background: var(--warn); }
+.translate-overlay.is-error .to-spinner { display: none; }

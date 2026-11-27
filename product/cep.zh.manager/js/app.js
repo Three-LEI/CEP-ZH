@@ -1,4 +1,4 @@
-﻿/* ZyYu-CEP通用汉化管理 - modern editor prototype (no build step). */
+/* ZyYu-CEP通用汉化管理 - modern editor prototype (no build step). */
 (function () {
   'use strict';
 
@@ -87,6 +87,7 @@
     importOverwrite: false,
     translationRunning: false,
     lastTranslationSeen: '',
+    trOverlayFlash: null,
     apiTesting: false,
     apiTestToken: '',
     debugDismissed: '',
@@ -586,6 +587,7 @@
     if (view === 'export') renderExport();
     if (view === 'about') renderAbout();
     if (view === 'plugin') renderPlugin();
+    updateTranslateOverlay();
   }
 
   /**
@@ -1056,6 +1058,90 @@
     setTimeout(refreshAgent, 1200);
   }
 
+  var TR_OVERLAY_TITLES = { manual: 'AI 翻译中', auto: '自动翻译中', queued: '等待翻译', done: '翻译完成', error: '翻译失败' };
+
+  function translateScopeLabel(bundleId) {
+    if (!bundleId) return '全部字典';
+    return pluginLabel(bundleId) || bundleId;
+  }
+
+  /**
+   * Floating progress card over the entry table. It reflects the manual task,
+   * the auto-translate batch and the queued state, and briefly keeps the
+   * finished/error result before hiding again.
+   */
+  function updateTranslateOverlay() {
+    var el = $('translateOverlay');
+    if (!el) return;
+    var tr = S.agent && S.agent.translation;
+    var autoTr = S.agent && S.agent.autoTranslate;
+    var now = Date.now();
+    var mode = '';
+    var data = null;
+    if (S.translationRunning) {
+      if (tr && tr.running) {
+        data = tr;
+        mode = tr.auto ? 'auto' : 'manual';
+      } else {
+        data = { bundleId: S.key, total: 0, done: 0 };
+        mode = 'manual';
+      }
+    } else if (S.trOverlayFlash && S.trOverlayFlash.until > now) {
+      mode = S.trOverlayFlash.status;
+      data = S.trOverlayFlash;
+    } else if (autoTr && autoTr.status === 'queued' && (Number(autoTr.queued) || 0) > 0) {
+      mode = 'queued';
+      data = autoTr;
+    }
+    if (!mode || S.view !== 'plugin') {
+      el.classList.add('hidden');
+      return;
+    }
+    el.classList.remove('hidden');
+    el.classList.toggle('is-done', mode === 'done');
+    el.classList.toggle('is-error', mode === 'error');
+    el.classList.toggle('is-queued', mode === 'queued');
+    var total = Number(data.total) || 0;
+    var done = Number(data.done) || 0;
+    var indeterminate = (mode === 'manual' || mode === 'auto' || mode === 'queued') && !total;
+    el.classList.toggle('is-indeterminate', indeterminate);
+    $('toTitle').textContent = TR_OVERLAY_TITLES[mode] || 'AI 翻译';
+    var sub;
+    if (mode === 'queued') {
+      sub = (Number(data.queued) || 0) + ' 个插件排队 · ' + translateScopeLabel(data.bundleId);
+    } else if (mode === 'done') {
+      sub = '+' + (Number(data.translated) || 0) + ' 条译文 · ' + translateScopeLabel(data.bundleId);
+    } else if (mode === 'error') {
+      var err = String(data.error || data.message || '未知错误');
+      sub = err.length > 42 ? err.slice(0, 42) + '…' : err;
+    } else if (total) {
+      sub = translateScopeLabel(data.bundleId) + ' · ' + done + ' / ' + total + ' 条';
+    } else {
+      sub = translateScopeLabel(data.bundleId) + ' · 准备中…';
+    }
+    $('toSub').textContent = sub;
+    var fill = $('toFill');
+    if (mode === 'done' || mode === 'error') fill.style.width = '100%';
+    else fill.style.width = (total ? Math.max(3, Math.min(100, Math.round(done / total * 100))) : 0) + '%';
+    var statA;
+    var statB;
+    if (mode === 'done') {
+      statA = '已翻译 +' + (Number(data.translated) || 0);
+      statB = '跳过 ' + (Number(data.skipped) || 0);
+    } else if (mode === 'error') {
+      statA = '任务中止';
+      statB = '详见提示';
+    } else if (mode === 'queued') {
+      statA = '队列 ' + (Number(data.queued) || 0);
+      statB = '等待开始';
+    } else {
+      statA = '进度 ' + done + ' / ' + total;
+      statB = '跳过 ' + (Number(data.skipped) || 0);
+    }
+    $('toStatA').textContent = statA;
+    $('toStatB').textContent = statB;
+  }
+
   function updateTranslationUI() {
     var running = !!S.translationRunning || !!S.maintainToken;
     if ($('btnAi')) {
@@ -1111,6 +1197,7 @@
     if (!writeJson(CONTROL, current)) return;
     S.translationRunning = true;
     updateTranslationUI();
+    updateTranslateOverlay();
     $('agentStatus').textContent = 'TRANSLATE / QUEUED';
     toast(scope === 'all' ? '已请求 AI 翻译全部字典' : '已请求 AI 翻译当前插件', 2600);
     setTimeout(refreshAgent, 300);
@@ -1473,6 +1560,16 @@
     if (tr && !tr.running && tr.token && tr.token !== S.lastTranslationSeen) {
       S.lastTranslationSeen = tr.token;
       S.translationRunning = false;
+      S.trOverlayFlash = tr.error
+        ? { status: 'error', error: tr.error, bundleId: tr.bundleId, until: Date.now() + 7000 }
+        : {
+            status: 'done',
+            translated: tr.translated || 0,
+            skipped: tr.skipped || 0,
+            unchanged: tr.unchanged || 0,
+            bundleId: tr.bundleId,
+            until: Date.now() + 3000,
+          };
       var ctl = readJson(CONTROL, {});
       if (ctl.translationTask && ctl.translationTask.token === tr.token) {
         delete ctl.translationTask;
@@ -1568,6 +1665,7 @@
     renderDebugNotice();
     renderCompactStatus();
     updateTranslationUI();
+    updateTranslateOverlay();
     if (S.view === 'settings') renderSettings();
   }
 
