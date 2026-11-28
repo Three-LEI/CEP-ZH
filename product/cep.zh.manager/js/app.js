@@ -1947,6 +1947,16 @@
     $('importOverwrite').onchange = function () { S.importOverwrite = this.checked; };
     $('btnSaveApi').onclick = saveSettings;
     $('btnRefreshAgent').onclick = function () { refreshAgent(); toast('Agent 状态已刷新'); };
+    $('btnRestartAgent').onclick = function () {
+      if (!confirm('重启后台 Agent？\n\n正在进行的捕获和翻译会中断，几秒后自动恢复。')) return;
+      if (!FS) { toast('cep.fs 不可用'); return; }
+      ensureDir(BASE + '/agent');
+      var r = FS.writeFile(BASE + '/agent/restart.token', String(Date.now()));
+      if (!r || r.err !== 0) { toast('写入重启标记失败'); return; }
+      toast('已请求重启 Agent，约 5 秒内生效', 3200);
+      setTimeout(refreshAgent, 1500);
+      setTimeout(refreshAgent, 6000);
+    };
     ['apiProvider', 'apiBase', 'apiModel', 'apiKey', 'apiLang'].forEach(function (id) {
       $(id).onfocus = function () { S.apiDirty = true; };
       $(id).oninput = function () { S.apiDirty = true; };

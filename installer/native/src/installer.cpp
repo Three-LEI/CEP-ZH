@@ -425,8 +425,7 @@ bool ShouldExtract(const std::string& name)
     if (normalized.empty() || normalized.front() != '/') normalized.insert(normalized.begin(), '/');
     return normalized.find("/product/cep.zh.manager/") != std::string::npos ||
            normalized.find("/tools/cep-zh/") != std::string::npos ||
-           normalized.find("/tools/elevate/dist/") != std::string::npos ||
-           normalized.find("/tools/bootstrap/dist/VCRUNTIME140_1.dll") != std::string::npos;
+           normalized.find("/tools/elevate/dist/") != std::string::npos;
 }
 
 bool ExtractZip(const std::wstring& zipPath, const std::wstring& dest, bool onlyCep,
@@ -652,65 +651,6 @@ int EngineMajor(const std::wstring& exe)
     if (!VerQueryValueW(data.data(), L"\\", reinterpret_cast<void**>(&info), &length) || !info)
         return 0;
     return static_cast<int>(HIWORD(info->dwFileVersionMS));
-}
-
-bool IsOurProxy(const std::wstring& path)
-{
-    std::vector<uint8_t> bytes;
-    if (!ReadBinaryFile(path, bytes)) return false;
-    const std::string text(bytes.begin(), bytes.end());
-    return text.find("cep-zh CEP engine proxy") != std::string::npos;
-}
-
-bool IsOurEngineProxy(const std::wstring& path)
-{
-    std::vector<uint8_t> bytes;
-    if (!ReadBinaryFile(path, bytes)) return false;
-    const std::string text(bytes.begin(), bytes.end());
-    return text.find("cep-zh CEP engine proxy") != std::string::npos;
-}
-
-std::vector<std::wstring> CepEngineDirs()
-{
-    const std::vector<std::wstring> roots = {
-        L"D:\\Adobe",
-        L"C:\\Program Files\\Adobe",
-        L"C:\\Program Files (x86)\\Adobe",
-    };
-    std::vector<std::wstring> dirs;
-    std::error_code ec;
-    for (const auto& root : roots) {
-        if (!DirectoryExists(root)) continue;
-        for (fs::recursive_directory_iterator it(fs::path(root), ec), end; it != end && !ec; it.increment(ec)) {
-            if (ec) break;
-            if (!it->is_regular_file()) continue;
-            if (_wcsicmp(it->path().filename().c_str(), L"CEPHtmlEngine.exe") == 0)
-                dirs.push_back(it->path().parent_path().wstring());
-        }
-        ec.clear();
-    }
-    std::sort(dirs.begin(), dirs.end());
-    dirs.erase(std::unique(dirs.begin(), dirs.end()), dirs.end());
-    return dirs;
-}
-
-int RestoreEngineProxy(std::deque<std::wstring>& logs)
-{
-    int restored = 0;
-    for (const auto& dir : CepEngineDirs()) {
-        const std::wstring target = JoinPath(dir, L"VCRUNTIME140_1.dll");
-        const std::wstring backup = target + L".cepzh-orig";
-        if (FileExists(backup)) {
-            if (CopyFileSimple(backup, target)) {
-                DeleteFileW(backup.c_str());
-                ++restored;
-            }
-        } else if (IsOurProxy(target)) {
-            if (DeleteFileW(target.c_str())) ++restored;
-        }
-    }
-    if (restored) logs.push_back(L"CEP12 引擎代理已恢复：" + std::to_wstring(restored) + L" 个");
-    return restored;
 }
 
 std::wstring InstalledExePath()
@@ -1016,13 +956,6 @@ bool RunInstaller(const UiPublish& publish)
     if (!InstallFiles(repoRoot, node, error)) return fail(error);
     Trace(L"INSTALLED");
     ClearCepUiCaches(logs);
-    apply();
-
-    step1 = L"清理旧版引擎代理";
-    status = L"移除旧版 CEP12 VCRUNTIME 代理，统一改用 .debug…";
-    progress = 82;
-    apply();
-    RestoreEngineProxy(logs);
     step1 = L"完成";
     progress = 84;
     apply();
@@ -1182,7 +1115,6 @@ bool RunUninstall(const UiPublish& publish)
     status = L"移除扩展、Agent 与快捷方式…";
     apply();
 
-    RestoreEngineProxy(logs);
     if (!RemoveTree(extTarget)) log(L"警告：扩展目录未完全删除");
     if (!RemoveTree(extTarget + L".cepzh-backup")) log(L"警告：扩展备份未完全删除");
     if (!RemoveTree(agentRoot)) log(L"警告：Agent 目录未完全删除");

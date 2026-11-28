@@ -2,7 +2,9 @@
  *
  * Runs in CEP's Node-enabled hidden panel. It does not implement injection by
  * itself; it starts the cep-zh Agent (external Node prototype) with the host
- * PID and writes a status file the Manager can read.
+ * PID and writes a status file the Manager can read. If the Agent exits or
+ * stops writing its heartbeat it is restarted automatically; the Manager can
+ * also ask for a restart through agent/restart.token.
  *
  * Config: %APPDATA%\CEP-ZH\config.json
  *   { "nodePath": "C:\\...\\node.exe", "agentScript": "F:\\...\\tools\\cep-zh\\agent.mjs",
@@ -29,6 +31,8 @@
   var hostPid = (typeof process !== 'undefined' && process.ppid) ? process.ppid : 0;
   var statusPath = dir + '\\status-' + (hostPid || 'unknown') + '.json';
   var logPath = dir + '\\agent.log';
+  var statePath = base + '\\state.json';
+  var restartTokenPath = dir + '\\restart.token';
 
   function log(msg) {
     try { fs.appendFileSync(logPath, new Date().toISOString() + ' ' + msg + '\r\n'); } catch (e) {}
@@ -57,42 +61,116 @@
 
   var args = [script].concat(cfg.extraArgs || []);
   if (hostPid) args.push('--host-pid', String(hostPid));
-  var child;
-  try {
-    child = cp.spawn(node, args, { windowsHide: true, stdio: 'ignore', detached: false });
-  } catch (e) {
-    writeStatus({ state: 'spawn-failed', hostPid: hostPid, error: String(e), node: node, script: script });
-    log('spawn failed: ' + e);
-    return;
+
+  var child = null;
+  var restarts = [];
+  var restartTimer = null;
+  var gaveUp = false;
+  var startedAt = Date.now();
+  var WATCHDOG_STALE_MS = 90000;
+  var RESTART_WINDOW_MS = 10 * 60 * 1000;
+  var RESTART_DELAYS = [1000, 2000, 5000, 10000, 20000];
+
+  function baseStatus() {
+    return {
+      hostPid: hostPid, node: node, script: script,
+      agentPid: child ? child.pid : 0,
+      startedAt: new Date(startedAt).toISOString(),
+      restarts: restarts.length,
+    };
   }
 
-  var state = {
-    state: 'running', hostPid: hostPid, childPid: child.pid,
-    node: node, script: script, startedAt: new Date().toISOString()
-  };
-  writeStatus(state);
-  log('spawned child=' + child.pid + ' host=' + hostPid + ' node=' + node);
+  function scheduleRestart(reason) {
+    if (gaveUp) return;
+    var now = Date.now();
+    restarts = restarts.filter(function (t) { return now - t < RESTART_WINDOW_MS; });
+    if (restarts.length >= 5) {
+      gaveUp = true;
+      writeStatus(Object.assign(baseStatus(), { state: 'gave-up', reason: reason }));
+      log('restart limit reached, giving up');
+      return;
+    }
+    restarts.push(now);
+    var delay = RESTART_DELAYS[Math.min(restarts.length - 1, RESTART_DELAYS.length - 1)];
+    writeStatus(Object.assign(baseStatus(), { state: 'restarting', reason: reason, delay: delay }));
+    log('restart in ' + delay + 'ms (' + reason + ')');
+    clearTimeout(restartTimer);
+    restartTimer = setTimeout(function () { spawnAgent('restart'); }, delay);
+  }
 
-  child.on('exit', function (code, signal) {
-    state.state = 'exited';
-    state.exitCode = code;
-    state.signal = signal;
-    state.exitedAt = new Date().toISOString();
-    writeStatus(state);
-    log('child exited code=' + code + ' signal=' + signal);
-  });
-  child.on('error', function (err) {
-    state.state = 'error';
-    state.error = String(err);
-    writeStatus(state);
-    log('child error: ' + err);
-  });
+  function spawnAgent(reason) {
+    restartTimer = null;
+    if (child && child.exitCode === null) return;
+    var spawned;
+    try {
+      spawned = cp.spawn(node, args, { windowsHide: true, stdio: 'ignore', detached: false });
+    } catch (e) {
+      writeStatus(Object.assign(baseStatus(), { state: 'spawn-failed', error: String(e) }));
+      log('spawn failed: ' + e);
+      scheduleRestart('spawn-failed');
+      return;
+    }
+    child = spawned;
+    startedAt = Date.now();
+    writeStatus(Object.assign(baseStatus(), { state: 'running', reason: reason }));
+    log('spawned child=' + child.pid + ' host=' + hostPid + ' node=' + node);
+    child.on('exit', function (code, signal) {
+      log('child exited code=' + code + ' signal=' + signal);
+      scheduleRestart('exit');
+    });
+    child.on('error', function (err) {
+      log('child error: ' + err);
+      scheduleRestart('error');
+    });
+  }
+
+  function forceRestart(reason) {
+    log('restart requested (' + reason + ')');
+    restarts = [];
+    gaveUp = false;
+    clearTimeout(restartTimer);
+    restartTimer = null;
+    if (child && child.exitCode === null) {
+      try { child.kill(); } catch (e) {}
+      // The exit handler schedules the respawn.
+    } else {
+      spawnAgent(reason);
+    }
+  }
+
+  spawnAgent('initial');
 
   setInterval(function () {
-    if (state.state === 'running') writeStatus(state);
+    // Manual restart token from the Manager.
+    try {
+      if (fs.existsSync(restartTokenPath)) {
+        fs.unlinkSync(restartTokenPath);
+        forceRestart('manual');
+        return;
+      }
+    } catch (e) {}
+    if (!child || child.exitCode !== null) return;
+    // Watchdog: the Agent rewrites state.json every tick, so a stale file means
+    // the process is hung even though it still exists.
+    var stale = false;
+    try {
+      var st = fs.statSync(statePath);
+      var mtime = st.mtimeMs || (st.mtime && st.mtime.getTime()) || 0;
+      stale = mtime > 0 && Date.now() - mtime > WATCHDOG_STALE_MS;
+    } catch (e) {
+      stale = Date.now() - startedAt > WATCHDOG_STALE_MS;
+    }
+    if (stale) {
+      log('watchdog: no heartbeat, killing child');
+      writeStatus(Object.assign(baseStatus(), { state: 'hung' }));
+      try { child.kill(); } catch (e) {}
+      return;
+    }
+    writeStatus(Object.assign(baseStatus(), { state: 'running' }));
   }, 5000);
 
   window.addEventListener('beforeunload', function () {
-    try { child.kill(); } catch (e) {}
+    clearTimeout(restartTimer);
+    try { if (child) child.kill(); } catch (e) {}
   });
 })();
