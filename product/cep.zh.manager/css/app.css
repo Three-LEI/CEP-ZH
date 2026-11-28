@@ -558,7 +558,8 @@ body.micro .compact-note {
 .plugin-item .pbadge { font: 0.708rem/1 var(--mono); color: var(--accent); }
 .side-footer { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-2); }
 .auto-switches { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; align-self: flex-start; }
-html.legacy-flex-gap .auto-switches > * + * { margin-left: 10px; }
+html.legacy-flex-gap .auto-switches { gap: 0; margin-right: -10px; }
+html.legacy-flex-gap .auto-switches > * { margin-right: 10px; margin-bottom: 4px; }
 .ai-all { width: 100%; margin-top: 6px; font-size: 0.833rem; }
 .ai-all.running { border-color: var(--accent); color: var(--accent); }
 
@@ -951,8 +952,8 @@ html.legacy-flex-gap .brand-row { gap: 0; }
 html.legacy-flex-gap .brand-row > * + * { margin-left: 10px; }
 html.legacy-flex-gap .byline { gap: 0; }
 html.legacy-flex-gap .byline > * + * { margin-left: 8px; }
-html.legacy-flex-gap .top-actions { gap: 0; }
-html.legacy-flex-gap .top-actions > * + * { margin-left: 10px; }
+html.legacy-flex-gap .top-actions { gap: 0; margin-right: -10px; }
+html.legacy-flex-gap .top-actions > * { margin-right: 10px; margin-bottom: 10px; }
 html.legacy-flex-gap .update-notice { gap: 0; }
 html.legacy-flex-gap .update-notice > * + * { margin-left: 10px; }
 html.legacy-flex-gap .debug-notice { gap: 0; }
@@ -969,22 +970,20 @@ html.legacy-flex-gap .view { gap: 0; }
 html.legacy-flex-gap .view > * + * { margin-top: 10px; }
 html.legacy-flex-gap .view-head { gap: 0; }
 html.legacy-flex-gap .view-head > * + * { margin-left: 12px; }
-html.legacy-flex-gap .view-actions { gap: 0; }
-html.legacy-flex-gap .view-actions > * + * { margin-left: 7px; }
-html.legacy-flex-gap .view-actions > * { margin-bottom: 4px; }
+html.legacy-flex-gap .view-actions { gap: 0; margin-right: -7px; }
+html.legacy-flex-gap .view-actions > * { margin-right: 7px; margin-bottom: 7px; }
 html.legacy-flex-gap .stat { gap: 0; }
 html.legacy-flex-gap .stat > * + * { margin-left: 6px; }
-html.legacy-flex-gap .table-toolbar { gap: 0; }
-html.legacy-flex-gap .table-toolbar > * + * { margin-left: 8px; }
-html.legacy-flex-gap .table-toolbar > * { margin-bottom: 4px; }
+html.legacy-flex-gap .table-toolbar { gap: 0; margin-right: -8px; }
+html.legacy-flex-gap .table-toolbar > * { margin-right: 8px; margin-bottom: 4px; }
 html.legacy-flex-gap .pager { gap: 0; }
 html.legacy-flex-gap .pager > * + * { margin-left: 8px; }
-html.legacy-flex-gap .text-view-actions { gap: 0; }
-html.legacy-flex-gap .text-view-actions > * + * { margin-left: 7px; }
-html.legacy-flex-gap .card-actions { gap: 0; }
-html.legacy-flex-gap .card-actions > * + * { margin-left: 7px; }
-html.legacy-flex-gap .link-line { gap: 0; }
-html.legacy-flex-gap .link-line > * + * { margin-left: 8px; }
+html.legacy-flex-gap .text-view-actions { gap: 0; margin-right: -7px; }
+html.legacy-flex-gap .text-view-actions > * { margin-right: 7px; margin-bottom: 7px; }
+html.legacy-flex-gap .card-actions { gap: 0; margin-right: -7px; }
+html.legacy-flex-gap .card-actions > * { margin-right: 7px; margin-bottom: 7px; }
+html.legacy-flex-gap .link-line { gap: 0; margin-right: -8px; }
+html.legacy-flex-gap .link-line > * { margin-right: 8px; margin-bottom: 8px; }
 html.legacy-flex-gap .about-files-head { gap: 0; }
 html.legacy-flex-gap .about-files-head > * + * { margin-left: 12px; }
 html.legacy-flex-gap .path-actions { gap: 0; }
@@ -1095,3 +1094,23 @@ html.legacy-flex-gap .top-actions > .switch > .switch-text { margin-left: 10px; 
 .translate-overlay.is-error { border-color: var(--warn); }
 .translate-overlay.is-error #toFill { background: var(--warn); }
 .translate-overlay.is-error .to-spinner { display: none; }
+
+/* The four capture/translate switches: a fixed two-column grid where the host
+   supports CSS Grid (CEP 9+), so rows line up regardless of label width; the
+   flex fallback above stays for engines without grid. */
+@supports (display: grid) {
+  .auto-switches {
+    display: grid;
+    grid-template-columns: max-content max-content;
+    justify-content: start;
+    align-items: center;
+    grid-gap: 6px 12px;
+    gap: 6px 12px;
+  }
+  .auto-switches > * { margin: 0; }
+  html.legacy-flex-gap .auto-switches { margin-right: 0; gap: 6px 12px; grid-gap: 6px 12px; }
+  html.legacy-flex-gap .auto-switches > * { margin: 0; }
+  @media (max-width: 680px) {
+    .auto-switches { grid-template-columns: max-content; }
+  }
+}
